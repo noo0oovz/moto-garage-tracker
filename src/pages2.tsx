@@ -4,6 +4,7 @@ import { useStore } from './store'
 import { Empty } from './ui'
 import type { ModalState } from './modals'
 import { fmtDate, fuelEfficiency, inRange, num, peso, warrantyInfo } from './logic'
+import { useLayout } from './useLayout'
 
 type Open = (m: ModalState) => void
 
@@ -24,6 +25,7 @@ function RangeSelect({ value, onChange }: { value: number | null; onChange: (v: 
 
 export function FuelPage({ open }: { open: Open }) {
   const { state, vehicle, deleteLog } = useStore()
+  const layout = useLayout()
   const [range, setRange] = useState<number | null>(365)
   const data = useMemo(() => {
     if (!vehicle) return null
@@ -39,7 +41,7 @@ export function FuelPage({ open }: { open: Open }) {
   if (!vehicle || !data) return <Empty>No vehicle selected.</Empty>
 
   return (
-    <div className="page space-y-4">
+    <div className="page space-y-4 pb-20">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-lg font-bold">Fuel Logs</h2>
         <RangeSelect value={range} onChange={setRange} />
@@ -73,7 +75,7 @@ export function FuelPage({ open }: { open: Open }) {
                 <div><p>Efficiency</p><p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{data.eff.map[f.id] ? `${data.eff.map[f.id].toFixed(1)} km/L` : '—'}</p></div>
               </div>
               {(f.station || !f.fullTank) && (
-                <p className="mt-2 truncate text-xs text-slate-500 dark:text-slate-400">{f.station}{!f.fullTank ? ' · partial fill' : ''}</p>
+                <p className="mt-2 break-words text-xs text-slate-500 dark:text-slate-400">{f.station}{!f.fullTank ? ' · partial fill' : ''}</p>
               )}
             </li>
           ))}
@@ -81,7 +83,8 @@ export function FuelPage({ open }: { open: Open }) {
       )}
 
       <button onClick={() => open({ kind: 'log', tab: 'fuel' })} aria-label="Log fuel"
-        className="btn-primary fixed bottom-24 right-4 z-20 rounded-full px-5 shadow-xl shadow-orange-500/30 md:bottom-6 md:right-6">
+        style={{ right: 'max(1rem, env(safe-area-inset-right))', bottom: layout === 'phone' ? 'calc(5.25rem + env(safe-area-inset-bottom))' : '1rem' }}
+        className="btn-primary fixed z-20 rounded-full px-5 shadow-xl shadow-orange-500/30">
         <Fuel size={18} /> LOG FUEL
       </button>
     </div>
@@ -171,8 +174,8 @@ export function PartsPage({ open }: { open: Open }) {
                 <span className="absolute inset-y-3 left-0 w-1 rounded-r bg-orange-500" aria-hidden />
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <h3 className="flex items-center gap-1.5 text-sm font-bold"><Cog size={14} className="shrink-0 text-orange-500" /> <span className="truncate">{p.partType}</span></h3>
-                    <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                    <h3 className="flex items-center gap-1.5 text-sm font-bold"><Cog size={14} className="shrink-0 text-orange-500" /> <span className="break-words">{p.partType}</span></h3>
+                    <p className="break-words text-xs text-slate-500 dark:text-slate-400">
                       {[p.brand, p.description, p.partNumber && `#${p.partNumber}`].filter(Boolean).join(' · ') || p.condition}
                     </p>
                   </div>

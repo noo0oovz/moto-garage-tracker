@@ -23,7 +23,7 @@ export function CodingBanner({ v, compact = false }: { v: Vehicle; compact?: boo
   if (compact) {
     return (
       <div className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold ${tone}`}>
-        <Icon size={16} className="shrink-0" /> <span className="truncate">{c.label}</span>
+        <Icon size={16} className="shrink-0" /> <span className="min-w-0 break-words">{c.label}</span>
       </div>
     )
   }
@@ -74,7 +74,7 @@ export function GaragePage({ open, go }: { open: Open; go: (p: Page) => void }) 
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-orange-500/15 text-orange-500"><MapPin size={20} /></span>
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-bold">Fuel Watch</span>
-          <span className="block truncate text-xs text-slate-500 dark:text-slate-400">Compare Petron, Shell, Caltex &amp; more, or estimate the price near you</span>
+          <span className="block text-xs text-slate-500 dark:text-slate-400">Compare Petron, Shell, Caltex &amp; more, or estimate the price near you</span>
         </span>
         <ChevronRight size={16} className="text-slate-400" />
       </button>
@@ -199,27 +199,29 @@ export function LogsPage({ open }: { open: Open }) {
         {shown.length === 0 ? <Empty>No entries match.</Empty> : (
           <>
             {/* Mobile / tablet cards */}
-            <ul className="space-y-2 lg:hidden">
+            <ul className="grid gap-2 md:grid-cols-2 xl:hidden">
               {shown.map((r) => (
                 <li key={r.id} className="card flex items-center gap-3 p-3">
                   <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${r.kind === 'fuel' ? 'bg-sky-500/15 text-sky-500' : 'bg-orange-500/15 text-orange-500'}`}>
                     {r.kind === 'fuel' ? <Fuel size={18} /> : <Wrench size={18} />}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold">{r.category}{r.place ? ` · ${r.place}` : ''}</p>
-                    <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                    <p className="break-words text-sm font-semibold">{r.category}{r.place ? ` · ${r.place}` : ''}</p>
+                    <p className="break-words text-xs text-slate-500 dark:text-slate-400">
                       {fmtDate(r.date)}{r.odometer ? ` · ${num(r.odometer)} km` : ''}{r.kmPerL ? ` · ${r.kmPerL.toFixed(1)} km/L` : ''}
                     </p>
-                    {r.desc && <p className="truncate text-xs text-slate-500 dark:text-slate-400">{r.desc}</p>}
+                    {r.desc && <p className="break-words text-xs text-slate-500 dark:text-slate-400">{r.desc}</p>}
                   </div>
-                  <span className="text-sm font-bold">{peso(r.cost, 2)}</span>
-                  <EditBtn r={r} />
-                  <button aria-label="Delete" className="grid h-11 w-11 place-items-center rounded-xl text-slate-400 hover:text-red-500" onClick={() => del(r)}><Trash2 size={16} /></button>
+                  <span className="shrink-0 text-sm font-bold tabular-nums">{peso(r.cost, 2)}</span>
+                  <div className="flex shrink-0 flex-col min-[420px]:flex-row">
+                    <EditBtn r={r} />
+                    <button aria-label="Delete" className="grid h-11 w-11 place-items-center rounded-xl text-slate-400 hover:text-red-500" onClick={() => del(r)}><Trash2 size={16} /></button>
+                  </div>
                 </li>
               ))}
             </ul>
             {/* Desktop table */}
-            <div className="card hidden overflow-hidden lg:block">
+            <div className="card hidden overflow-x-auto xl:block">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-white/5">
                   <tr>{['Date', 'Category', 'Shop / Station', 'Details', 'Odometer', 'km/L', 'Cost', ''].map((h) => <th key={h} className="px-4 py-3 font-semibold">{h}</th>)}</tr>
@@ -230,7 +232,7 @@ export function LogsPage({ open }: { open: Open }) {
                       <td className="whitespace-nowrap px-4 py-3">{fmtDate(r.date)}</td>
                       <td className="px-4 py-3">{r.category}</td>
                       <td className="px-4 py-3">{r.place || '—'}</td>
-                      <td className="max-w-xs truncate px-4 py-3 text-slate-500">{r.desc || '—'}</td>
+                      <td className="min-w-[10rem] max-w-xs break-words px-4 py-3 text-slate-500">{r.desc || '—'}</td>
                       <td className="px-4 py-3">{r.odometer ? `${num(r.odometer)} km` : '—'}</td>
                       <td className="px-4 py-3">{r.kmPerL ? r.kmPerL.toFixed(1) : '—'}</td>
                       <td className="px-4 py-3 text-right font-semibold">{peso(r.cost, 2)}</td>
@@ -285,7 +287,7 @@ export function ChecklistPage() {
                       </span>
                       <span className="min-w-0">
                         <span className={`block text-sm font-semibold ${on ? 'text-slate-400 line-through' : ''}`}>{i.label}</span>
-                        <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{i.hint}</span>
+                        <span className="block text-xs text-slate-500 dark:text-slate-400">{i.hint}</span>
                       </span>
                     </button>
                   </li>
@@ -316,8 +318,8 @@ export function VehiclesPage({ open }: { open: Open }) {
               <div className="flex items-start gap-3">
                 <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-orange-500/15 text-orange-500"><Icon size={22} /></span>
                 <div className="min-w-0 flex-1">
-                  <h3 className="truncate font-bold">{v.nickname}</h3>
-                  <p className="truncate text-xs text-slate-500 dark:text-slate-400">{v.year} {v.make} {v.model} · {v.plate || 'No plate'}</p>
+                  <h3 className="break-words font-bold">{v.nickname}</h3>
+                  <p className="break-words text-xs text-slate-500 dark:text-slate-400">{v.year} {v.make} {v.model} · {v.plate || 'No plate'}</p>
                 </div>
               </div>
               <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">

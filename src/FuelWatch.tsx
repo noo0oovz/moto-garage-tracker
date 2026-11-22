@@ -127,7 +127,7 @@ function AreaSearch({ data, value, onPick, placeholder }: { data: FwData; value:
                 return (
                   <li key={k} role="option" aria-selected="false" onMouseDown={(e) => { e.preventDefault(); pick(k) }}
                     className="flex min-h-11 cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm hover:bg-orange-500/10">
-                    <span className="min-w-0 truncate font-medium">{n.place.label}</span>
+                    <span className="min-w-0 break-words font-medium">{n.place.label}</span>
                     <span className="shrink-0 text-xs text-slate-400">{Math.round(n.km)} km away</span>
                   </li>
                 )
@@ -139,7 +139,7 @@ function AreaSearch({ data, value, onPick, placeholder }: { data: FwData; value:
             <li key={h.key} id={`${id}-o${i}`} role="option" aria-selected={i === active}
               onMouseDown={(e) => { e.preventDefault(); pick(h.key) }} onMouseEnter={() => setActive(i)}
               className={`flex min-h-11 cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm ${i === active ? 'bg-orange-500/10' : ''}`}>
-              <span className="min-w-0 truncate font-medium">{h.label}</span>
+              <span className="min-w-0 break-words font-medium">{h.label}</span>
               <span className="shrink-0 text-xs text-slate-400">{groupLabel(h.region.id)}</span>
             </li>
           ))}
@@ -185,7 +185,7 @@ function BrowseAreas({ data, value, onPick }: { data: FwData; value: string; onP
                 return (
                   <li key={k}>
                     <button onClick={() => onPick(k)} aria-pressed={k === value}
-                      className={`min-h-11 w-full rounded-lg px-2 text-left text-sm transition lg:min-h-9 ${k === value ? 'bg-orange-500 font-semibold text-white' : 'hover:bg-slate-100 dark:hover:bg-white/5'}`}>
+                      className={`min-h-11 w-full rounded-lg px-2 text-left text-sm transition [@media(hover:hover)_and_(pointer:fine)]:lg:min-h-9 ${k === value ? 'bg-orange-500 font-semibold text-white' : 'hover:bg-slate-100 dark:hover:bg-white/5'}`}>
                       <span className="line-clamp-2">{a.name}</span>
                     </button>
                   </li>
@@ -321,7 +321,7 @@ export function FuelWatchPage() {
         <AreaSearch data={data} value={areaKey} onPick={choose} placeholder={nearOk ? `Nearest to me: ${placeLabel(nearOk.place.area)}` : 'e.g. Davao, Parañaque, Cebu…'} />
         <div>
           <span className="label">Fuel</span>
-          <div className="no-scrollbar -mx-1 flex gap-1 overflow-x-auto px-1" role="tablist" aria-label="Fuel product">
+          <div className="flex flex-wrap gap-1" role="tablist" aria-label="Fuel product">
             {FW_PRODUCTS.map((p) => (
               <button key={p} role="tab" aria-selected={product === p} onClick={() => { setProduct(p); lsSet(LS_PRODUCT, p) }}
                 className={`min-h-11 shrink-0 rounded-xl px-3 text-sm font-semibold transition ${product === p ? 'bg-orange-500 text-white' : 'border border-slate-300 text-slate-600 dark:border-white/10 dark:text-slate-300'}`}>
@@ -400,7 +400,7 @@ export function FuelWatchPage() {
             {nearest.filter((n) => n.km <= MAX_NEAR_KM).map((n) => (
               <li key={`${n.place.region.id}${n.place.label}`}>
                 <button className="flex min-h-11 w-full items-center justify-between gap-2 py-1 text-left text-sm" onClick={() => choose(makeKey(n.place.region, n.place.area))}>
-                  <span className="min-w-0 truncate">{n.place.label} <span className="text-slate-400">· {Math.round(n.km)} km</span></span>
+                  <span className="min-w-0 break-words">{n.place.label} <span className="text-slate-400">· {Math.round(n.km)} km</span></span>
                   <span className="shrink-0 font-bold tabular-nums">{(() => { const t = typicalCurrent(data, n.place.region, n.place.area, product, today); return t ? peso(t.price, 2) : '—' })()}</span>
                 </button>
               </li>
