@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import {
   AlarmClockCheck, CalendarClock, Check, ChevronRight, Download, Fuel, Gauge, Pencil, Plus, RotateCcw, Trash2,
-  Upload, Wallet, Wrench, FileSpreadsheet, ShieldAlert, ShieldCheck, ShieldQuestion, Car, Bike, TrendingUp,
+  Upload, Wallet, Wrench, FileSpreadsheet, Cog, ShieldAlert, ShieldCheck, ShieldQuestion, Car, Bike, TrendingUp,
 } from 'lucide-react'
 import { useStore } from './store'
 import { Empty, Progress } from './ui'
@@ -77,8 +77,9 @@ export function GaragePage({ open }: { open: Open }) {
         <Kpi icon={Wallet} label="Spent this month" value={peso(data.sum.thisMonth)} sub={`All time ${peso(data.sum.all)}`} />
         <Kpi icon={Fuel} label="Avg efficiency" value={data.eff.avg ? `${data.eff.avg.toFixed(1)} km/L` : '—'}
           sub={data.eff.last ? `Last fill ${data.eff.last.toFixed(1)} km/L` : 'Log 2+ full tanks'} />
-        <Kpi icon={TrendingUp} label="Cost per km" value={data.sum.perKm ? `${peso(data.sum.perKm, 2)}/km` : '—'}
-          sub={attention ? `${attention} item${attention > 1 ? 's' : ''} need attention` : 'All maintenance healthy'} />
+        <Kpi icon={attention ? ShieldAlert : TrendingUp} label="Maintenance"
+          value={attention ? `${attention} ${attention === 1 ? 'item needs' : 'items need'} attention` : 'All healthy'}
+          sub={data.sum.perKm ? `Cost per km ${peso(data.sum.perKm, 2)}` : 'Cost per km —'} />
       </div>
 
       <section>
@@ -374,6 +375,9 @@ export function SettingsPage() {
 
 export function MorePage({ go }: { go: (p: Page) => void }) {
   const items: { p: Page; icon: typeof Car; title: string; sub: string }[] = [
+    { p: 'fuel', icon: Fuel, title: 'Fuel Logs', sub: 'Fill-ups, litres and km/L' },
+    { p: 'history', icon: Wrench, title: 'Service History', sub: 'Timeline of every service' },
+    { p: 'parts', icon: Cog, title: 'Parts & Accessories', sub: 'Part records and warranties' },
     { p: 'vehicles', icon: Car, title: 'Vehicles', sub: 'Add, edit, switch or delete' },
     { p: 'settings', icon: CalendarClock, title: 'Settings & Backup', sub: 'Theme, export, import, reset' },
   ]

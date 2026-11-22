@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Modal, Field, Toggle, numVal } from './ui'
 import { useStore } from './store'
-import { CODING_DAYS, FUEL_TYPES } from './data'
-import { EXPENSE_CATEGORIES, type CodingDay, type ExpenseCategory, type FuelType, type MaintItem, type Vehicle, type VehicleType } from './types'
+import { CODING_DAYS, FUEL_TYPES, PART_TYPES } from './data'
+import { EXPENSE_CATEGORIES, PART_CONDITIONS, type CodingDay, type ExpenseCategory, type FuelType, type MaintItem, type PartCondition, type Vehicle, type VehicleType } from './types'
 import { peso, todayISO } from './logic'
 
 export type ModalState =
@@ -10,10 +10,12 @@ export type ModalState =
   | { kind: 'service'; item: MaintItem }
   | { kind: 'maint'; item?: MaintItem }
   | { kind: 'vehicle'; item?: Vehicle }
+  | { kind: 'part' }
   | null
 
 export function Modals({ modal, close }: { modal: ModalState; close: () => void }) {
   if (!modal) return null
+  if (modal.kind === 'part') return <PartModal close={close} />
   if (modal.kind === 'log') return <LogModal initial={modal.tab} close={close} />
   if (modal.kind === 'service') return <ServiceModal item={modal.item} close={close} />
   if (modal.kind === 'maint') return <MaintModal item={modal.item} close={close} />
@@ -42,7 +44,8 @@ function LogModal({ initial, close }: { initial: 'fuel' | 'expense'; close: () =
     const t = numVal(l) * numVal(p)
     setTotal(t > 0 ? t.toFixed(2) : '')
   }
-  const valid = tab === 'fuel' ? numVal(liters) > 0 && numVal(total) > 0 : numVal(cost) > 0
+  const odoLow = numVal(odo) > 0 && numVal(odo) < (vehicle?.odometer ?? 0) && date >= todayISO()
+  const valid = (tab === 'fuel' ? numVal(liters) > 0 && numVal(total) > 0 && numVal(odo) > 0 : numVal(cost) > 0) && !odoLow
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -95,9 +98,58 @@ function LogModal({ initial, close }: { initial: 'fuel' | 'expense'; close: () =
             <Field label="Notes" className="col-span-2"><input className="field" value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
           </>
         )}
+        {odoLow && <p role="alert" className="col-span-2 text-xs text-red-500">Odometer can't be lower than the current {vehicle.odometer.toLocaleString()} km for a log dated today. Back-date the entry if it's older.</p>}
         <button type="submit" disabled={!valid} className="btn-primary col-span-2 mt-1">
           Save {tab === 'fuel' ? `fuel ${numVal(total) ? peso(numVal(total), 2) : ''}` : 'expense'}
         </button>
+      </form>
+    </Modal>
+  )
+}
+
+function PartModal({ close }: { close: () => void }) {
+  const { vehicle, addPart } = useStore()
+  const [partType, setPartType] = useState(PART_TYPES[0])
+  const [condition, setCondition] = useState<PartCondition>('Brand New Original')
+  const [description, setDescription] = useState('')
+  const [brand, setBrand] = useState('')
+  const [partNumber, setPartNumber] = useState('')
+  const [shop, setShop] = useState('')
+  const [amount, setAmount] = useState('')
+  const [km, setKm] = useState(String(vehicle?.odometer ?? ''))
+  const [date, setDate] = useState(todayISO())
+  const [warranty, setWarranty] = useState('')
+  const [notes, setNotes] = useState('')
+  if (!vehicle) return null
+  return (
+    <Modal title="Add Part Replacement" onClose={close}>
+      <form
+        className="grid grid-cols-2 gap-3"
+        onSubmit={(e) => {
+          e.preventDefault()
+          addPart({
+            vehicleId: vehicle.id, partType, condition, description, brand, partNumber, shop, amount: numVal(amount),
+            installedKm: numVal(km), date, warrantyMonths: numVal(warranty) > 0 ? numVal(warranty) : undefined, notes,
+          })
+          close()
+        }}
+      >
+        <Field label="Part Type *" className="col-span-2">
+          <select className="field" value={partType} onChange={(e) => setPartType(e.target.value)}>{PART_TYPES.map((t) => <option key={t}>{t}</option>)}</select>
+        </Field>
+        <Field label="Part Condition *" className="col-span-2">
+          <select className="field" value={condition} onChange={(e) => setCondition(e.target.value as PartCondition)}>{PART_CONDITIONS.map((c) => <option key={c}>{c}</option>)}</select>
+        </Field>
+        <Field label="Description" className="col-span-2"><input className="field" value={description} onChange={(e) => setDescription(e.target.value)} /></Field>
+        <Field label="Brand"><input className="field" value={brand} onChange={(e) => setBrand(e.target.value)} /></Field>
+        <Field label="Part Number"><input className="field" value={partNumber} onChange={(e) => setPartNumber(e.target.value)} /></Field>
+        <Field label="Amount (₱) *"><input type="number" inputMode="decimal" step="0.01" className="field" value={amount} onChange={(e) => setAmount(e.target.value)} required /></Field>
+        <Field label="Shop"><input className="field" value={shop} onChange={(e) => setShop(e.target.value)} /></Field>
+        <Field label="Installed Mileage (km) *"><input type="number" inputMode="numeric" className="field" value={km} onChange={(e) => setKm(e.target.value)} required /></Field>
+        <Field label="Replacement Date *"><input type="date" className="field" value={date} onChange={(e) => setDate(e.target.value)} required /></Field>
+        <Field label="Warranty (months)" className="col-span-2"><input type="number" inputMode="numeric" className="field" value={warranty} onChange={(e) => setWarranty(e.target.value)} placeholder="Optional" /></Field>
+        <Field label="Notes" className="col-span-2"><input className="field" value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
+        <button className="btn-primary col-span-2" type="submit">Save Record</button>
       </form>
     </Modal>
   )
@@ -107,7 +159,7 @@ function ServiceModal({ item, close }: { item: MaintItem; close: () => void }) {
   const { vehicle, markServiced } = useStore()
   const [date, setDate] = useState(todayISO())
   const [odo, setOdo] = useState(String(vehicle?.odometer ?? item.lastServiceKm))
-  const [record, setRecord] = useState(false)
+  const [record, setRecord] = useState(true)
   const [cost, setCost] = useState('')
   const [shop, setShop] = useState('')
   return (

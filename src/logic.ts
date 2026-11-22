@@ -172,6 +172,17 @@ export function codingStatus(v: Vehicle, date = new Date()) {
   return { state: 'free' as const, label: `Free to drive today`, note: `Your coding day is ${coding}. Today is ${today}.`, today }
 }
 
+export function inRange(date: string, days: number | null, today = todayISO()) {
+  return days === null || date >= addDays(today, -days)
+}
+
+export function warrantyInfo(p: { date: string; warrantyMonths?: number }, today = todayISO()) {
+  if (!p.warrantyMonths) return null
+  const end = addMonths(p.date, p.warrantyMonths)
+  const days = daysBetween(today, end)
+  return { end, days, active: days >= 0 }
+}
+
 export function csvEscape(v: unknown) {
   const s = v === undefined || v === null ? '' : String(v)
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s

@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import type { AppState, Expense, FuelLog, MaintItem, Vehicle } from './types'
+import type { AppState, Expense, FuelLog, MaintItem, PartRecord, ServiceRecord, Vehicle } from './types'
 import { SCHEMA_VERSION, STORAGE_KEY, buildDemoState, buildMaintenance } from './data'
 import { todayISO, uid } from './logic'
 
@@ -15,6 +15,9 @@ function migrate(raw: unknown): AppState | null {
     maint: s.maint,
     fuel: s.fuel,
     expenses: s.expenses,
+    // v1 -> v2: service history and parts ledger were added.
+    services: Array.isArray(s.services) ? s.services : [],
+    parts: Array.isArray(s.parts) ? s.parts : [],
     checklist: s.checklist ?? {},
     activeVehicleId: vehicles.some((v) => v.id === s.activeVehicleId) ? (s.activeVehicleId as string) : (vehicles[0]?.id ?? ''),
     theme: s.theme === 'light' ? 'light' : 'dark',
@@ -50,6 +53,9 @@ interface Store {
   saveMaint: (m: Omit<MaintItem, 'id'> & { id?: string }) => void
   deleteMaint: (id: string) => void
   markServiced: (id: string, p: ServicePayload) => void
+  deleteService: (id: string) => void
+  addPart: (p: Omit<PartRecord, 'id'>) => void
+  deletePart: (id: string) => void
   addFuel: (f: Omit<FuelLog, 'id'>) => void
   addExpense: (e: Omit<Expense, 'id'>) => void
   deleteLog: (kind: 'fuel' | 'expense', id: string) => void
@@ -97,6 +103,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         maint: s.maint.filter((m) => m.vehicleId !== id),
         fuel: s.fuel.filter((m) => m.vehicleId !== id),
         expenses: s.expenses.filter((m) => m.vehicleId !== id),
+        services: s.services.filter((m) => m.vehicleId !== id),
+        parts: s.parts.filter((m) => m.vehicleId !== id),
         activeVehicleId: s.activeVehicleId === id ? (vehicles[0]?.id ?? '') : s.activeVehicleId,
       }
     }),
@@ -109,14 +117,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const item = s.maint.find((m) => m.id === id)
       if (!item) return s
       const maint = s.maint.map((m) => (m.id === id ? { ...m, lastServiceKm: p.odometer, lastServiceDate: p.date } : m))
-      const expenses = p.cost && p.cost > 0
+      const recId = uid()
+      const record: ServiceRecord = {
+        id: recId, vehicleId: item.vehicleId, maintItemId: id, name: item.name, date: p.date, odometer: p.odometer,
+        cost: p.cost && p.cost > 0 ? p.cost : undefined, shopName: p.shopName, notes: p.notes,
+      }
+      const expenses = record.cost
         ? [...s.expenses, {
-            id: uid(), vehicleId: item.vehicleId, date: p.date, category: 'PMS & Fluids' as const, cost: p.cost,
-            shopName: p.shopName ?? '', notes: p.notes || item.name, odometer: p.odometer, maintItemId: id,
+            id: uid(), vehicleId: item.vehicleId, date: p.date, category: 'PMS & Fluids' as const, cost: record.cost,
+            shopName: p.shopName ?? '', notes: item.name, odometer: p.odometer, sourceId: recId,
           }]
         : s.expenses
-      return { ...s, maint, expenses, vehicles: bumpOdo(s.vehicles, item.vehicleId, p.odometer) }
+      return { ...s, maint, expenses, services: [...s.services, record], vehicles: bumpOdo(s.vehicles, item.vehicleId, p.odometer) }
     }),
+    deleteService: (id) => setState((s) => ({
+      ...s, services: s.services.filter((x) => x.id !== id), expenses: s.expenses.filter((e) => e.sourceId !== id),
+    })),
+    addPart: (p) => setState((s) => {
+      const id = uid()
+      const expense: Expense = {
+        id: uid(), vehicleId: p.vehicleId, date: p.date, category: 'Wear & Tear Parts', cost: p.amount,
+        shopName: p.shop, notes: `${p.partType}${p.brand ? ` (${p.brand})` : ''}`, odometer: p.installedKm, sourceId: id,
+      }
+      return {
+        ...s, parts: [...s.parts, { ...p, id }], expenses: p.amount > 0 ? [...s.expenses, expense] : s.expenses,
+        vehicles: bumpOdo(s.vehicles, p.vehicleId, p.installedKm),
+      }
+    }),
+    deletePart: (id) => setState((s) => ({
+      ...s, parts: s.parts.filter((x) => x.id !== id), expenses: s.expenses.filter((e) => e.sourceId !== id),
+    })),
     addFuel: (f) => setState((s) => ({
       ...s, fuel: [...s.fuel, { ...f, id: uid() }], vehicles: bumpOdo(s.vehicles, f.vehicleId, f.odometer),
     })),

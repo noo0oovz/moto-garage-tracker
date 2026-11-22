@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import {
-  Bike, Car, Fuel, LayoutDashboard, ListChecks, MoreHorizontal, Moon, Plus, Receipt, Settings, Sun, Wrench,
+  Bike, Car, Cog, Fuel, History, LayoutDashboard, ListChecks, MoreHorizontal, Moon, Plus, Receipt, Settings, Sun, Wrench,
 } from 'lucide-react'
 import { useStore } from './store'
 import { Modals, type ModalState } from './modals'
 import { ChecklistPage, CodingBanner, GaragePage, LogsPage, MorePage, SettingsPage, VehiclesPage } from './pages'
+import { FuelPage, HistoryPage, PartsPage } from './pages2'
 import type { Page } from './types'
 import { num } from './logic'
 
@@ -14,8 +15,19 @@ const NAV: { page: Page; label: string; icon: typeof Car }[] = [
   { page: 'checklist', label: 'Checklist', icon: ListChecks },
   { page: 'more', label: 'More', icon: MoreHorizontal },
 ]
+const SIDEBAR: { page: Page; label: string; icon: typeof Car }[] = [
+  { page: 'garage', label: 'Garage', icon: LayoutDashboard },
+  { page: 'logs', label: 'Logs', icon: Receipt },
+  { page: 'fuel', label: 'Fuel Logs', icon: Fuel },
+  { page: 'history', label: 'Service History', icon: History },
+  { page: 'parts', label: 'Parts', icon: Cog },
+  { page: 'checklist', label: 'Checklist', icon: ListChecks },
+  { page: 'vehicles', label: 'Vehicles', icon: Car },
+  { page: 'settings', label: 'Settings', icon: Settings },
+]
 const TITLES: Record<Page, string> = {
   garage: 'Garage', logs: 'Logs & Expenses', checklist: 'Pre-Trip Checklist', more: 'More', vehicles: 'Vehicles', settings: 'Settings',
+  fuel: 'Fuel Logs', history: 'Service History', parts: 'Parts & Accessories',
 }
 
 export default function App() {
@@ -24,7 +36,7 @@ export default function App() {
   const [modal, setModal] = useState<ModalState>(null)
   const open = (m: ModalState) => setModal(m)
   const close = () => setModal(null)
-  const isActive = (p: Page) => page === p || (p === 'more' && (page === 'vehicles' || page === 'settings'))
+  const isActive = (p: Page) => page === p || (p === 'more' && ['vehicles', 'settings', 'fuel', 'history', 'parts'].includes(page))
 
   const switcher = (cls: string) => (
     <select aria-label="Active vehicle" className={cls} value={vehicle?.id ?? ''} onChange={(e) => setActive(e.target.value)}>
@@ -47,7 +59,7 @@ export default function App() {
           </div>
         )}
         <nav className="space-y-1" aria-label="Main">
-          {([...NAV.slice(0, 3), { page: 'vehicles' as Page, label: 'Vehicles', icon: Car }, { page: 'settings' as Page, label: 'Settings', icon: Settings }]).map((n) => (
+          {SIDEBAR.map((n) => (
             <button key={n.page} onClick={() => setPage(n.page)}
               className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-sm font-semibold transition ${page === n.page ? 'bg-orange-500/15 text-orange-500' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/5'}`}>
               <n.icon size={18} /> {n.label}
@@ -99,6 +111,9 @@ export default function App() {
         <main className="mx-auto w-full max-w-7xl px-4 pb-28 pt-4 md:px-6 md:pb-10 md:pt-6">
           {page === 'garage' && <GaragePage open={open} />}
           {page === 'logs' && <LogsPage open={open} />}
+          {page === 'fuel' && <FuelPage open={open} />}
+          {page === 'history' && <HistoryPage />}
+          {page === 'parts' && <PartsPage open={open} />}
           {page === 'checklist' && <ChecklistPage />}
           {page === 'more' && <MorePage go={setPage} />}
           {page === 'vehicles' && <VehiclesPage open={open} />}

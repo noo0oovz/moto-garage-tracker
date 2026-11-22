@@ -1,7 +1,13 @@
-import type { AppState, FuelLog, Expense, MaintItem, Vehicle, VehicleType, CodingDay, FuelType } from './types'
+import type { AppState, FuelLog, Expense, MaintItem, PartRecord, ServiceRecord, Vehicle, VehicleType, CodingDay, FuelType } from './types'
 import { addDays, addMonths, uid } from './logic'
 
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 2
+
+export const PART_TYPES = [
+  'Battery', 'Front Brake Pads', 'Rear Brake Pads/Shoes', 'Tires', 'Rear Tire', 'Front Tire', 'Alternator', 'Starter Motor',
+  'Spark Plugs', 'Shock Absorbers', 'Suspension Arms', 'Clutch Kit', 'Drive Chain & Sprockets', 'Headlight/Bulbs', 'Wipers',
+  'Radiator/Hoses', 'Belts', 'Other',
+]
 export const STORAGE_KEY = 'motogarage-ph'
 
 export const CODING_DAYS: CodingDay[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Exempt']
@@ -134,12 +140,35 @@ export function buildDemoState(today: string): AppState {
     ex(moto, 90, 'Registration & Insurance', 1200, 'LTO', 'Motorcycle registration'),
   ]
 
+  const sv = (v: Vehicle, ago: number, name: string, odometer: number, cost: number, shopName: string): ServiceRecord => ({
+    id: uid(), vehicleId: v.id, name, date: addDays(today, -ago), odometer, cost, shopName,
+  })
+  const services: ServiceRecord[] = [
+    sv(hilux, 120, CAR_TEMPLATE[0].name, 69000, 4200, 'Toyota Service Center'),
+    sv(hilux, 75, CAR_TEMPLATE[3].name, 75000, 1200, 'Alignment Pro'),
+    sv(hilux, 300, CAR_TEMPLATE[2].name, 63000, 1800, 'Toyota Service Center'),
+    sv(moto, 60, MOTO_TEMPLATE[1].name, 17000, 650, 'Moto Shop'),
+    sv(moto, 21, MOTO_TEMPLATE[0].name, 17800, 120, 'Home'),
+  ]
+
+  const pt = (v: Vehicle, ago: number, p: Partial<PartRecord> & Pick<PartRecord, 'partType' | 'amount' | 'installedKm'>): PartRecord => ({
+    id: uid(), vehicleId: v.id, condition: 'Brand New Original', description: '', brand: '', partNumber: '', shop: '',
+    date: addDays(today, -ago), notes: '', ...p,
+  })
+  const parts: PartRecord[] = [
+    pt(hilux, 200, { partType: 'Battery', brand: 'Motolite', description: 'NS70 maintenance-free', amount: 5400, installedKm: 71500, warrantyMonths: 18, shop: 'Motolite Center' }),
+    pt(hilux, 150, { partType: 'Front Brake Pads', brand: 'Akebono', condition: 'Brand New Replacement', amount: 3100, installedKm: 73200, warrantyMonths: 6 }),
+    pt(moto, 110, { partType: 'Rear Tire', brand: 'Michelin', description: '130/70-13', amount: 2800, installedKm: 16200, warrantyMonths: 12 }),
+  ]
+
   return {
     version: SCHEMA_VERSION,
     vehicles: [hilux, moto],
     maint,
     fuel,
     expenses,
+    services,
+    parts,
     checklist: {},
     activeVehicleId: hilux.id,
     theme: 'dark',

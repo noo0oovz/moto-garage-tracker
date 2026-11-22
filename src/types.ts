@@ -57,7 +57,39 @@ export interface Expense {
   shopName: string
   notes: string
   odometer?: number
+  /** id of the ServiceRecord / PartRecord that created this expense */
+  sourceId?: string
+}
+
+export interface ServiceRecord {
+  id: string
+  vehicleId: string
   maintItemId?: string
+  name: string
+  date: string
+  odometer: number
+  cost?: number
+  shopName?: string
+  notes?: string
+}
+
+export const PART_CONDITIONS = ['Brand New Original', 'Brand New Replacement', 'Surplus / Used'] as const
+export type PartCondition = (typeof PART_CONDITIONS)[number]
+
+export interface PartRecord {
+  id: string
+  vehicleId: string
+  partType: string
+  condition: PartCondition
+  description: string
+  brand: string
+  partNumber: string
+  shop: string
+  amount: number
+  installedKm: number
+  date: string
+  warrantyMonths?: number
+  notes: string
 }
 
 export type ThemeMode = 'dark' | 'light'
@@ -68,9 +100,11 @@ export interface AppState {
   maint: MaintItem[]
   fuel: FuelLog[]
   expenses: Expense[]
+  services: ServiceRecord[]
+  parts: PartRecord[]
   checklist: Record<string, string[]> // vehicleId -> checked keys
   activeVehicleId: string
   theme: ThemeMode
 }
 
-export type Page = 'garage' | 'logs' | 'checklist' | 'more' | 'vehicles' | 'settings'
+export type Page = 'garage' | 'logs' | 'checklist' | 'more' | 'vehicles' | 'settings' | 'fuel' | 'history' | 'parts'
