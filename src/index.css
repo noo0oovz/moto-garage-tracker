@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --color-accent: #f97316;
+}
+
+html, body, #root { min-height: 100%; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  overflow-x: hidden;
+  @apply bg-slate-100 text-slate-900 antialiased;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+.dark body { @apply bg-[#0b0f17] text-slate-100; }
+
+@utility card { @apply rounded-2xl border border-slate-200 bg-white shadow-sm transition-colors dark:border-white/10 dark:bg-[#131a26] dark:shadow-none; }
+@utility field { @apply min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-base text-slate-900 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-500/30 dark:border-white/10 dark:bg-[#0b0f17] dark:text-slate-100 md:text-sm; }
+@utility btn { @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition active:scale-[0.98] disabled:opacity-50; }
+@utility btn-primary { @apply btn bg-orange-500 text-white hover:bg-orange-600; }
+@utility btn-ghost { @apply btn border border-slate-300 text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/5; }
+@utility btn-danger { @apply btn border border-red-500/40 text-red-600 hover:bg-red-500/10 dark:text-red-400; }
+@utility label { @apply mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400; }
+
+@keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes pop { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@utility anim-sheet { animation: sheet-up 0.28s cubic-bezier(0.22, 1, 0.36, 1); }
+@utility anim-pop { animation: pop 0.2s ease-out; }
+@utility anim-fade { animation: fade 0.2s ease-out; }
+@utility page { animation: fade 0.25s ease-out; }
+@utility pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+@utility pt-safe { padding-top: env(safe-area-inset-top); }
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}
