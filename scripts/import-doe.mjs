@@ -1,28 +1,33 @@
-// Weekly importer: DOE "Price Monitoring of Liquid Fuels" PDFs -> public/fuel-prices.json
+// Weekly importer: DOE price-monitoring PDFs + weekly price-adjustment notices -> public/fuel-prices.json
 //
-// Usage:  node scripts/import-doe.mjs [--out public/fuel-prices.json] [--fixtures dir]
+// Usage:  node scripts/import-doe.mjs [--out public/fuel-prices.json] [--prev public/fuel-prices.json]
 //
 // Safety rules (the whole point of this script):
 //  * every price row must reconcile with the PDF's own OVERALL RANGE column, else it is dropped;
 //  * a region is only published if it yields enough verified areas;
-//  * if nothing verifies we exit non-zero and leave the previous JSON untouched.
+//  * a region that fails this week keeps its previous data (its own week stamp makes the age visible);
+//  * scanned/image-only reports (e.g. North Luzon) are skipped, never OCR'd;
+//  * if nothing at all can be verified we exit non-zero and leave the previous JSON untouched.
 import fs from 'node:fs'
 import path from 'node:path'
 import { openPdf, parseDocument } from './doe-parse.mjs'
+import { parseAdjustments } from './adjust-parse.mjs'
 import { parseWeek } from './week.mjs'
 
-const BASE = 'https://doe.gov.ph/data-and-prices/liquid-fuels/retail-pump-prices/'
+const SITE = 'https://doe.gov.ph/data-and-prices/liquid-fuels/retail-pump-prices/'
 const REGIONS = [
   { id: 'ncr', label: 'NCR', page: 'ncr-pump-prices', minAreas: 8 },
   { id: 'south-luzon', label: 'South Luzon', page: 'south-luzon-pump-prices', minAreas: 8 },
+  { id: 'visayas', label: 'Visayas', page: 'visayas-pump-prices', minAreas: 20 },
   { id: 'mindanao', label: 'Mindanao', page: 'mindanao-pump-prices', minAreas: 20 },
-  // north-luzon and visayas use layouts the parser cannot verify yet; see scripts/README.md
+  // north-luzon: most pages are scanned images with no text layer, so it cannot be verified (see README)
 ]
 const UA = { 'user-agent': 'Mozilla/5.0 (compatible; MotoGaragePH-importer; +https://github.com/noo0oovz/moto-garage-tracker)' }
 
 const args = process.argv.slice(2)
 const arg = (k, d) => (args.includes(k) ? args[args.indexOf(k) + 1] : d)
 const OUT = arg('--out', 'public/fuel-prices.json')
+const PREV = arg('--prev', 'public/fuel-prices.json')
 
 async function get(url, binary) {
   const res = await fetch(url, { headers: UA })
@@ -33,68 +38,112 @@ async function get(url, binary) {
 function pdfLinks(html) {
   const out = []
   const re = /<a[^>]*href="(https:\/\/d24qbtp4vooyzi\.cloudfront\.net[^"]+)"[^>]*>([\s\S]*?)<\/a>/g
-  for (let m; (m = re.exec(html)); ) out.push({ url: m[1].replace(/&amp;/g, '&'), label: m[2].replace(/<[^>]+>/g, '').trim() })
+  for (let m; (m = re.exec(html)); ) {
+    const label = m[2].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
+    if (/^(download|open in new tab)$/i.test(label)) continue
+    out.push({ url: m[1].replace(/&amp;/g, '&'), label })
+  }
   return out
 }
 
-async function parseUrl(url) {
-  const doc = await openPdf(await get(url, true))
-  return parseDocument(doc)
+/** "November 17 to 23" / "October 27 to November 2" -> week, using the year of the page (listing groups by year). */
+function weekFromLabel(label, year) {
+  return parseWeek(`${label.replace(/\bto\b/i, '-')} ${year}`)
 }
 
-/** Newest report whose week has already started (DOE posts the coming week early). */
-async function latestFor(region, today) {
-  const links = pdfLinks(await get(BASE + region.page, false))
-  // South Luzon lists three sub-regions per week; others list one file per week. Probe newest-looking links first.
+const today = () => new Date().toISOString().slice(0, 10)
+
+async function importRegion(region, td) {
+  const html = await get(SITE + region.page, false)
+  const links = pdfLinks(html)
+  const year = new Date().getFullYear()
+  // Candidates: links whose label is a readable week that has already started, newest first.
+  const dated = links
+    .map((l) => ({ ...l, week: weekFromLabel(l.label, year) }))
+    .filter((l) => l.week && l.week.start <= td)
+    .sort((a, b) => (a.week.start < b.week.start ? 1 : -1))
+  // South Luzon files are labelled by sub-region rather than week; fall back to probing them all.
+  const candidates = dated.length ? dated : links.map((l) => ({ ...l, week: null }))
+  const tried = []
+  const groups = new Map() // weekStart -> { week, areas, sources }
+  for (const l of candidates.slice(0, region.id === 'south-luzon' ? 40 : 4)) {
+    let parsed
+    try { parsed = await parseDocument(await openPdf(await get(l.url, true))) } catch (e) { tried.push(`${l.label}: ${e.message}`); continue }
+    // Prefer the week printed in the PDF; fall back to the listing label (Visayas prints no dates).
+    const pdfWeek = parseWeek(parsed.weekText)
+    const week = pdfWeek ?? l.week
+    if (!week || week.start > td) continue
+    if (pdfWeek && l.week && pdfWeek.start !== l.week.start) tried.push(`${l.label}: PDF says ${pdfWeek.start}, listing says ${l.week.start}; trusting the PDF`)
+    const areas = parsed.areas.filter((a) => Object.keys(a.prices).length)
+    if (!areas.length) { tried.push(`${l.label}: no verified rows`); continue }
+    const g = groups.get(week.start) ?? { week, areas: [], sources: [] }
+    g.areas.push(...areas); g.sources.push(l.url)
+    groups.set(week.start, g)
+    // Single-file regions: the newest started week that verifies is all we need.
+    if (region.id !== 'south-luzon' && g.areas.length >= region.minAreas) break
+  }
+  const best = [...groups.values()].sort((a, b) => (a.week.start < b.week.start ? 1 : -1))[0]
+  if (!best) return { problems: [`${region.id}: no readable report (${tried.join('; ') || 'none tried'})`] }
   const seen = new Set()
-  const results = []
-  for (const l of [...links].reverse().concat(links)) {
+  const areas = best.areas.filter((a) => { const k = `${a.province}|${a.name}`; if (seen.has(k)) return false; seen.add(k); return true })
+  if (areas.length < region.minAreas) return { problems: [`${region.id}: only ${areas.length} verified areas (< ${region.minAreas}); not published`] }
+  return { region: { id: region.id, label: region.label, weekStart: best.week.start, weekEnd: best.week.end, sources: best.sources, areas }, problems: tried }
+}
+
+/** Weekly announced price changes, newest started week first. */
+async function importAdjustments(td) {
+  const html = await get(SITE + 'price-adjustments', false)
+  const links = pdfLinks(html).filter((l) => /price adjust|prior notice|adjustment/i.test(l.label + l.url))
+  const weeks = []
+  const seen = new Set()
+  for (const l of links) {
     if (seen.has(l.url)) continue
     seen.add(l.url)
-    results.push(l)
+    let r
+    try { r = await parseAdjustments(await get(l.url, true)) } catch { continue }
+    if (!r.week || !Object.keys(r.brands).length) continue
+    weeks.push({ weekStart: r.week.start, weekEnd: r.week.end, source: l.url, brands: r.brands })
+    if (weeks.length >= 6) break
   }
-  return results
+  // Only weeks that have started count: the notice for the coming week is posted on the Monday before.
+  return weeks.filter((w) => w.weekStart <= td).sort((a, b) => (a.weekStart < b.weekStart ? 1 : -1))
 }
 
 async function main() {
-  const today = new Date().toISOString().slice(0, 10)
-  const regions = []
+  const td = today()
+  let prev = null
+  try { prev = JSON.parse(fs.readFileSync(PREV, 'utf8')) } catch { /* first run */ }
   const problems = []
+  const regions = []
   for (const region of REGIONS) {
-    const links = await latestFor(region, today)
-    const byWeek = new Map() // week.start -> { week, areas[] }
-    let probed = 0
-    // Probe links until we have the latest started week for this region (cap work; DOE keeps ~months of files).
-    for (const l of links) {
-      if (probed++ > 40) break
-      let parsed
-      try { parsed = await parseUrl(l.url) } catch (e) { problems.push(`${region.id}: ${e.message}`); continue }
-      const week = parseWeek(parsed.weekText)
-      if (!week || week.start > today) continue // unreadable, or a future week
-      if (!parsed.areas.length) continue
-      const entry = byWeek.get(week.start) ?? { week, areas: [], source: [] }
-      entry.areas.push(...parsed.areas.filter((a) => Object.keys(a.prices).length))
-      entry.source.push(l.url)
-      byWeek.set(week.start, entry)
-      // NCR/Mindanao: one file per week, so the first started week is the latest we need.
-      if (region.id !== 'south-luzon' && byWeek.size >= 1 && week.start <= today) {
-        // keep scanning only to see if a newer started week exists among the remaining links
-      }
+    let r
+    try { r = await importRegion(region, td) } catch (e) { r = { problems: [`${region.id}: ${e.message}`] } }
+    problems.push(...(r.problems ?? []))
+    if (r.region) {
+      const old = prev?.regions?.find((x) => x.id === region.id)
+      // Never replace newer data with older data (DOE sometimes reorders or reposts).
+      if (old && old.weekStart > r.region.weekStart) { regions.push(old); problems.push(`${region.id}: kept newer previous week ${old.weekStart}`) }
+      else regions.push(r.region)
+      console.log(`${region.id}: ${r.region.areas.length} areas, week ${r.region.weekStart}..${r.region.weekEnd}`)
+    } else {
+      const old = prev?.regions?.find((x) => x.id === region.id)
+      if (old) { regions.push(old); problems.push(`${region.id}: kept previous data from week ${old.weekStart}`) }
     }
-    if (!byWeek.size) { problems.push(`${region.id}: no readable report`); continue }
-    const newest = [...byWeek.values()].sort((a, b) => (a.week.start < b.week.start ? 1 : -1))[0]
-    const seenNames = new Set()
-    const areas = newest.areas.filter((a) => { const k = `${a.province}|${a.name}`; if (seenNames.has(k)) return false; seenNames.add(k); return true })
-    if (areas.length < region.minAreas) { problems.push(`${region.id}: only ${areas.length} verified areas (< ${region.minAreas}); not published`); continue }
-    regions.push({ id: region.id, label: region.label, weekStart: newest.week.start, weekEnd: newest.week.end, sources: newest.source, areas })
-    console.log(`${region.id}: ${areas.length} areas, week ${newest.week.start}..${newest.week.end}`)
   }
+  let adjustments = []
+  try { adjustments = await importAdjustments(td) } catch (e) { problems.push(`adjustments: ${e.message}`); adjustments = prev?.adjustments ?? [] }
+  if (adjustments.length) console.log(`adjustments: ${adjustments.map((a) => a.weekStart).join(', ')}`)
+
   if (!regions.length) { console.error('Nothing verified; leaving existing data untouched.\n' + problems.join('\n')); process.exit(1) }
-  const doc = { schema: 1, generatedAt: new Date().toISOString(), source: 'Philippines Department of Energy - Price Monitoring of Liquid Fuels', problems, regions }
+  const doc = {
+    schema: 2, generatedAt: new Date().toISOString(),
+    source: 'Philippines Department of Energy - Price Monitoring of Liquid Fuels and Price Adjustment notices',
+    problems, regions, adjustments,
+  }
   fs.mkdirSync(path.dirname(OUT), { recursive: true })
   fs.writeFileSync(OUT, JSON.stringify(doc))
   console.log(`wrote ${OUT} (${(fs.statSync(OUT).size / 1024).toFixed(0)} KB)`)
   if (problems.length) console.log('notes:\n  ' + problems.join('\n  '))
 }
 
-if (import.meta.url === `file://${process.argv[1].replace(/\\/g, '/')}` || process.argv[1]?.endsWith('import-doe.mjs')) main()
+main()

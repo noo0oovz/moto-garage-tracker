@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import fs from 'node:fs'
 import {
-  areaCoords, brandRows, estimateAt, freshness, haversineKm, nearestAreas, parseFuelData, typicalPrice,
+  areaCoords, areaKey, brandRows, estimateAt, freshness, haversineKm, latestAdjustmentWeek, nearestAreas, parseFuelData, productGroup, projectPrice, searchAreas, typicalCurrent, typicalPrice,
   type FwArea, type FwData,
 } from './pricing'
 import { parseWeek } from '../scripts/week.mjs'
 
 const area = (name: string, province: string, ron95: Record<string, [number, number]>): FwArea => ({ name, province, prices: { 'RON 95': ron95 } })
 const data = (areas: FwArea[]): FwData => ({
-  schema: 1, generatedAt: '', source: '',
+  schema: 2, generatedAt: '', source: '', adjustments: [],
   regions: [{ id: 'r', label: 'R', weekStart: '2026-11-10', weekEnd: '2026-11-16', sources: [], areas }],
 })
 
@@ -88,7 +88,7 @@ describe('freshness', () => {
 describe('parseFuelData', () => {
   it('rejects wrong schema or shape', () => {
     expect(parseFuelData(null)).toBeNull()
-    expect(parseFuelData({ schema: 2, regions: [] })).toBeNull()
+    expect(parseFuelData({ schema: 3, regions: [] })).toBeNull() // unknown future schema
     expect(parseFuelData({ schema: 1 })).toBeNull()
   })
   it('drops malformed regions but keeps good ones', () => {
@@ -128,8 +128,126 @@ describe('shipped public/fuel-prices.json', () => {
     const labels = (d?.regions ?? []).flatMap((r) => r.areas.map((a) => `${a.province} ${a.name}`))
     expect(labels.filter((l) => /date|monitor|note|\d/i.test(l))).toEqual([])
   })
+  it('puts well-known places under the right province (guards the importer label logic)', () => {
+    const where = new Map<string, string>()
+    for (const r of d?.regions ?? []) for (const a of r.areas) where.set(a.name, a.province)
+    const expect_: [string, string][] = [
+      ['Balilihan', 'Bohol'], ['Jagna', 'Bohol'], ['Borongan City', 'Eastern Samar'], ['Cadiz', 'Negros Occidental'],
+      ['Kalibo', 'Aklan'], ['Boracay', 'Aklan'], ['Cebu City', 'Cebu'], ['Dumaguete City', 'Negros Oriental'],
+      ['Davao City', 'Davao del Sur'], ['Tagum City', 'Davao del Norte'], ['Calamba', 'Laguna'], ['Bacoor', 'Cavite'],
+    ]
+    for (const [name, prov] of expect_) if (where.has(name)) expect({ name, province: where.get(name) }).toEqual({ name, province: prov })
+  })
+  it('has no truncated multi-line province names', () => {
+    const bad = (d?.regions ?? []).flatMap((r) => r.areas).filter((a) => /^(oriental|occidental|norte|sur|del|de)$/i.test(a.province) || /(del|de)$/i.test(a.province))
+    expect(bad.map((a) => `${a.province}/${a.name}`)).toEqual([])
+  })
+  it('has adjustments with sane values', () => {
+    for (const a of d?.adjustments ?? []) for (const b of Object.values(a.brands)) for (const v of Object.values(b)) expect(Math.abs(v as number)).toBeLessThan(40)
+  })
   it('places every area so "nearest" can reach it', () => {
     const unplaced = (d?.regions ?? []).flatMap((r) => r.areas).filter((a) => !areaCoords(a)).map((a) => a.name)
     expect(unplaced).toEqual([])
+  })
+})
+
+describe('projectPrice (announced weekly adjustments)', () => {
+  const adj = (weekStart: string, brands: FwData['adjustments'][number]['brands']) => ({ weekStart, weekEnd: weekStart, source: '', brands })
+  const d = (adjustments: FwData['adjustments']): FwData => ({ ...data([]), adjustments })
+
+  it('maps products to the right adjustment column', () => {
+    expect(['RON 91', 'RON 95', 'RON 97', 'RON 100'].map((p) => productGroup(p as never))).toEqual(['gasoline', 'gasoline', 'gasoline', 'gasoline'])
+    expect(productGroup('DIESEL')).toBe('diesel')
+    expect(productGroup('DIESEL PLUS')).toBe('diesel')
+    expect(productGroup('KEROSENE')).toBe('kerosene')
+  })
+  it('applies one announced change to a measured range', () => {
+    const r = projectPrice(d([adj('2026-11-17', { PETRON: { gasoline: -1.5 } })]), '2026-11-10', 'PETRON', 'RON 95', [72, 74], '2026-11-20')!
+    expect(r).toMatchObject({ lo: 70.5, hi: 72.5, delta: -1.5, weeks: ['2026-11-17'] })
+  })
+  it('chains several consecutive weeks', () => {
+    const r = projectPrice(d([adj('2026-11-10', { SHELL: { diesel: -4.1 } }), adj('2026-11-17', { SHELL: { diesel: -3.8 } })]), '2026-11-03', 'SHELL', 'DIESEL', [95, 95], '2026-11-20')!
+    expect(r.delta).toBeCloseTo(-7.9)
+    expect(r.lo).toBeCloseTo(87.1)
+  })
+  it('returns null when a week in the chain is missing (never bridges a gap)', () => {
+    expect(projectPrice(d([adj('2026-11-17', { SHELL: { diesel: -3.8 } })]), '2026-11-03', 'SHELL', 'DIESEL', [95, 95], '2026-11-20')).toBeNull()
+  })
+  it('returns null when the brand did not announce a change for that fuel', () => {
+    expect(projectPrice(d([adj('2026-11-17', { PETRON: { gasoline: -1.5 } })]), '2026-11-10', 'PETRON', 'DIESEL', [90, 90], '2026-11-20')).toBeNull()
+    expect(projectPrice(d([adj('2026-11-17', { PETRON: { gasoline: -1.5 } })]), '2026-11-10', 'SHELL', 'RON 95', [90, 90], '2026-11-20')).toBeNull()
+  })
+  it('does nothing when the measurement is already current', () => {
+    expect(projectPrice(d([adj('2026-11-17', { PETRON: { gasoline: -1.5 } })]), '2026-11-17', 'PETRON', 'RON 95', [70, 70], '2026-11-20')).toBeNull()
+  })
+  it('ignores weeks that have not started yet', () => {
+    expect(projectPrice(d([adj('2026-11-24', { PETRON: { gasoline: -1.5 } })]), '2026-11-17', 'PETRON', 'RON 95', [70, 70], '2026-11-20')).toBeNull()
+  })
+  it('finds the latest started adjustment week', () => {
+    const x = d([adj('2026-11-24', {}), adj('2026-11-17', {}), adj('2026-11-10', {})])
+    expect(latestAdjustmentWeek(x, '2026-11-20')?.weekStart).toBe('2026-11-17')
+    expect(latestAdjustmentWeek(d([]), '2026-11-20')).toBeNull()
+  })
+})
+
+describe('searchAreas', () => {
+  const d: FwData = {
+    ...data([]),
+    regions: [
+      { id: 'ncr', label: 'NCR', weekStart: '', weekEnd: '', sources: [], areas: [area('Parañaque City', '', {}), area('Pasay City', '', {}), area('Makati City', '', {})] },
+      { id: 'mindanao', label: 'Mindanao', weekStart: '', weekEnd: '', sources: [], areas: [
+        area('Davao City', 'Davao del Sur', {}), area('Digos City', 'Davao del Sur', {}), area('Tagum City', 'Davao del Norte', {}), area('Padada', 'Davao del Sur', {}),
+      ] },
+    ],
+  }
+  const names = (q: string) => searchAreas(d, q).map((h) => h.area.name)
+  it('matches partial words, ignoring case and accents', () => {
+    expect(names('para')).toEqual(['Parañaque City'])
+    expect(names('PARANAQUE')).toEqual(['Parañaque City'])
+    expect(names('pas')).toContain('Pasay City')
+  })
+  it('matches by province and region too', () => {
+    expect(names('davao')).toEqual(expect.arrayContaining(['Davao City', 'Digos City', 'Tagum City', 'Padada']))
+    expect(names('mindanao')).toHaveLength(4)
+    expect(names('ncr')).toHaveLength(3)
+  })
+  it('requires every word to match (narrowing as you type)', () => {
+    expect(names('davao sur').sort()).toEqual(['Davao City', 'Digos City', 'Padada'])
+    expect(names('davao norte')).toEqual(['Tagum City'])
+  })
+  it('ranks exact and prefix matches above looser ones', () => {
+    expect(names('davao city')[0]).toBe('Davao City')
+    expect(searchAreas(d, 'davao')[0].area.name).toBe('Davao City') // name starts with "davao"
+  })
+  it('returns nothing for blank or unmatched queries', () => {
+    expect(names('')).toEqual([])
+    expect(names('   ')).toEqual([])
+    expect(names('zzz')).toEqual([])
+  })
+  it('keys are stable and unique per area', () => {
+    const keys = searchAreas(d, 'city').map((h) => h.key)
+    expect(new Set(keys).size).toBe(keys.length)
+    expect(areaKey(d.regions[0], d.regions[0].areas[0])).toBe('ncr||Parañaque City')
+  })
+})
+
+describe('typicalCurrent', () => {
+  const region = (areas: FwArea[]) => ({ id: 'r', label: 'R', weekStart: '2026-11-10', weekEnd: '2026-11-16', sources: [], areas })
+  const a = area('Pasig City', '', { PETRON: [88, 90], SHELL: [90, 92], TOTAL: [85, 85] }) // mids 89, 91, 85
+  const withAdj = (brands: FwData['adjustments'][number]['brands']): FwData => ({ ...data([a]), adjustments: [{ weekStart: '2026-11-17', weekEnd: '2026-11-23', source: '', brands }] })
+  it('uses projected prices where the chain is complete, measured otherwise', () => {
+    const d = withAdj({ PETRON: { gasoline: -4 }, SHELL: { gasoline: -4 } }) // TOTAL announced nothing
+    const r = typicalCurrent(d, region([a]), a, 'RON 95', '2026-11-20')!
+    // petron 85, shell 87, total 85 (measured) -> median 85
+    expect(r.price).toBe(85)
+    expect(r).toMatchObject({ projected: 2, measured: 1 })
+  })
+  it('equals the plain measured median when there are no adjustments', () => {
+    const r = typicalCurrent(data([a]), region([a]), a, 'RON 95', '2026-11-20')!
+    expect(r.price).toBe(typicalPrice(a, 'RON 95'))
+    expect(r.projected).toBe(0)
+  })
+  it('is null for a product with no data', () => {
+    expect(typicalCurrent(data([a]), region([a]), a, 'DIESEL', '2026-11-20')).toBeNull()
   })
 })

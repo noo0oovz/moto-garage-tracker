@@ -8,7 +8,10 @@ export const PRODUCTS = ['RON 100', 'RON 97', 'RON 95', 'RON 91', 'DIESEL', 'DIE
 const PRODUCT_RE = /^(RON 100|RON 97|RON 95|RON 91|DIESEL PLUS|DIESEL|KEROSENE)$/
 const BRANDS = ['PETRON', 'SHELL', 'CALTEX', 'PHOENIX', 'TOTAL', 'FLYING V', 'UNIOIL', 'SEAOIL', 'PTT', 'JETTI', 'MY GAS', 'CLEAN FUEL', 'INDEPENDENT']
 
-const isPrice = (s) => /^\d{2,3}\.\d{2}$/.test(s)
+const NUM = String.raw`\d{2,3}(?:\.\d{1,2})?`
+const PRICE_RE = new RegExp(String.raw`^${NUM}$`)
+const RANGE_RE = new RegExp(String.raw`^${NUM}\s*-\s*${NUM}$`)
+const isPrice = (s) => PRICE_RE.test(s) && /\./.test(s) // bare integers (e.g. '79') only count inside a range
 const num = (s) => parseFloat(s)
 
 async function pageItems(page) {
@@ -82,16 +85,26 @@ export async function parsePage(page, ctx = {}) {
   const overallStart = header.overallX != null ? header.overallX - 14 : Infinity
   const colGap = median(header.cols.slice(1).map((c, i) => c.x - header.cols[i].x)) || 40
 
+  // Assign every grid cell to the NEAREST product row. A price line is often printed 1-2pt off its label,
+  // and on dense layouts (Visayas, ~4pt row pitch) a fixed window would grab a neighbour's cells.
+  const cellsByRow = new Map(prodRows.map((p) => [p, []]))
+  for (const i of items) {
+    if (i.x <= gridLeft || prodRows.includes(i)) continue
+    let best = null
+    for (const p of prodRows) {
+      const d = Math.abs(i.y - p.y)
+      if (!best || d < best.d) best = { p, d }
+    }
+    // Within ~0.6 of the row pitch: ties between two labels are left to the nearer one.
+    if (best && best.d <= rowH * 0.6) cellsByRow.get(best.p).push(i)
+  }
+
   const rows = []
   let skipped = 0
   for (const p of prodRows) {
-    const cells = items.filter((i) => Math.abs(i.y - p.y) <= rowH * 0.45 && i.x > gridLeft && i !== p)
-    // The DOE layout interleaves price cells vertically: min/max for a product sits on the product line or
-    // the line above. We read both lines and let the column geometry decide.
-    const above = items.filter((i) => i.y > p.y + rowH * 0.45 && i.y <= p.y + rowH * 1.2 && i.x > gridLeft)
-    void above
+    const cells = cellsByRow.get(p)
     const byBrand = new Map()
-    const tokens = cells.filter((c) => c.x < overallStart && (isPrice(c.s) || /^\d{2,3}\.\d{2}\s*-\s*\d{2,3}\.\d{2}$/.test(c.s)))
+    const tokens = cells.filter((c) => c.x < overallStart && (isPrice(c.s) || RANGE_RE.test(c.s)))
     for (const t of tokens) {
       const cx = t.x + t.w / 2
       let best = null
@@ -109,12 +122,15 @@ export async function parsePage(page, ctx = {}) {
     // Checksum: the OVERALL RANGE cells on the same line (everything between OVERALL and COMMON PRICE).
     const commonStart = header.commonX != null ? header.commonX - 12 : Infinity
     const rangeNums = cells.filter((c) => c.x >= overallStart && c.x < commonStart).flatMap((c) =>
-      isPrice(c.s) ? [num(c.s)] : /^\d{2,3}\.\d{2}\s*-\s*\d{2,3}\.\d{2}$/.test(c.s) ? c.s.split('-').map((v) => num(v.trim())) : [],
+      isPrice(c.s) ? [num(c.s)] : RANGE_RE.test(c.s) ? c.s.split('-').map((v) => num(v.trim())) : [],
     ).filter((v) => v > 0)
     let status = 'empty'
     if (brandPrices.length) {
       const lo = Math.min(...brandPrices.map((b) => b.min)), hi = Math.max(...brandPrices.map((b) => b.max))
       if (rangeNums.length >= 2) status = Math.abs(Math.min(...rangeNums) - lo) < 0.011 && Math.abs(Math.max(...rangeNums) - hi) < 0.011 ? 'ok' : 'mismatch'
+      // A row with one price has a one-number range ("min - max" collapses to a single cell). That is still a
+      // real check: the lone range value must equal the row's min AND max, i.e. the row really has a single price.
+      else if (rangeNums.length === 1) status = Math.abs(rangeNums[0] - lo) < 0.011 && Math.abs(rangeNums[0] - hi) < 0.011 ? 'ok' : 'mismatch'
       else status = 'unverified'
     } else if (rangeNums.length) status = 'mismatch' // range says there are prices, we found none
     rows.push({ y: p.y, product: p.s, brandPrices, status })
@@ -146,9 +162,24 @@ export async function parseDocument(doc) {
   const seen = new Set()
   let weekText = ''
   const emitted = new Set()
+  // Template ghosts: some reports leave a label from page 1 printed at the same spot on every later page
+  // (Visayas repeats "Boracay" and "Aklan"). A text label at identical coordinates on 2+ pages is never real
+  // data, so collect those first and ignore them.
+  const pageCache = []
+  const spotCount = new Map()
+  for (let pn = 1; pn <= doc.numPages; pn++) {
+    const its = await pageItems(await doc.getPage(pn))
+    pageCache.push(its)
+    for (const k of new Set(its.filter((i) => /^[A-Za-z]/.test(i.s) && !PRODUCT_RE.test(i.s)).map((i) => `${i.s}@${Math.round(i.x)},${Math.round(i.y)}`))) {
+      spotCount.set(k, (spotCount.get(k) ?? 0) + 1)
+    }
+  }
+  // The first printing is the real label; only its repeats on later pages are ghosts. A template ghost repeats on
+  // most pages (Visayas: 5 of 6); legitimate multi-line province names recur on only a few pages of a long report.
+  const isGhost = (i, pn) => pn > 1 && (spotCount.get(`${i.s}@${Math.round(i.x)},${Math.round(i.y)}`) ?? 0) >= Math.max(3, Math.ceil(doc.numPages * 0.6))
   for (let pn = 1; pn <= doc.numPages; pn++) {
     const page = await doc.getPage(pn)
-    const items = await pageItems(page)
+    const items = pageCache[pn - 1]
     if (pn <= 2 && !weekText) {
       const txt = items.map((i) => i.s).join(' ')
       const m = txt.match(/(?:week|period)[^()]{0,40}?(?:of|:)?\s*([A-Za-z]+\s*\d{1,2}\s*(?:-|to|–)\s*(?:[A-Za-z]+\s*)?\d{1,2}\s*,?\s*20\d\d)/i)
@@ -167,7 +198,7 @@ export async function parseDocument(doc) {
     const pcol = r.prodRows[0].x
     const blockSpan = (b) => ({ top: b[0].y + rowH * 0.7, bot: b[b.length - 1].y - rowH * 0.7 })
     const label = (i) => i.x < pcol - 4 && !HEADER_WORDS.test(i.s) && !PRODUCT_RE.test(i.s) && !/^(Republic|Department|Oil Industry|\(Kagawaran|DEPARTMENT)/i.test(i.s)
-    const labels = items.filter(label)
+    const labels = items.filter((i) => label(i) && !isGhost(i, pn))
     // x-clusters of label text: the right-most cluster is the city/municipality column, the left-most the province.
     const xs = []
     for (const l of [...labels].sort((p1, p2) => p1.x - p2.x)) {
@@ -205,9 +236,20 @@ export async function parseDocument(doc) {
       if (!mine.length) { stats.blocksNoLabel++; continue }
       // group multi-line city names ("Dasmariñas" / "City")
       const name = join(mine)
-      // nearest province label to the block's middle
+      // Province labels are centred vertically over their own group of towns, so the boundary between two
+      // adjacent provinces lies halfway between their label centres. A town takes the province whose
+      // interval contains it. (Nearest-centre matching mislabels towns in tall groups, e.g. Aklan -> Bohol.)
       const mid = (top + bot) / 2
-      const prov = provs.length ? [...provs].sort((p1, p2) => Math.abs((p1.maxY + p1.minY) / 2 - mid) - Math.abs((p2.maxY + p2.minY) / 2 - mid))[0] : null
+      const centres = provs.map((pv) => (pv.maxY + pv.minY) / 2) // descending: top of page first
+      let prov = null
+      if (provs.length) {
+        const idx = centres.findIndex((c, k) => {
+          const upper = k === 0 ? Infinity : (centres[k - 1] + c) / 2
+          const lower = k === centres.length - 1 ? -Infinity : (c + centres[k + 1]) / 2
+          return mid <= upper && mid > lower
+        })
+        prov = idx >= 0 ? provs[idx] : null
+      }
       // A province is accepted only if it reads like a place name (letters only) - never boilerplate such as
       // "DATE MONITORING:" that sits in the same column.
       const provText = prov ? join(prov.parts) : ''

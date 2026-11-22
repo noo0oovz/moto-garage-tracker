@@ -19,12 +19,20 @@ export interface FwRegion {
   sources: string[]
   areas: FwArea[]
 }
+export interface FwAdjustment {
+  weekStart: string
+  weekEnd: string
+  source: string
+  /** brand -> product group -> signed change in PHP per litre announced for that week */
+  brands: Record<string, Partial<Record<'gasoline' | 'diesel' | 'kerosene', number>>>
+}
 export interface FwData {
   schema: number
   generatedAt: string
   source: string
   problems?: string[]
   regions: FwRegion[]
+  adjustments: FwAdjustment[]
 }
 
 export interface Place {
@@ -48,6 +56,22 @@ const PROVINCE: Record<string, LL> = {
   'South Cotabato': [6.2, 124.8], Cotabato: [7.2, 124.9], 'Sultan Kudarat': [6.5, 124.4], Sarangani: [5.9, 125.2],
   'Agusan del Sur': [8.5, 126.0], 'Agusan del Norte': [9.0, 125.5], 'Surigao del Sur': [8.8, 126.1], 'Surigao del Norte': [9.6, 125.6], 'Dinagat Islands': [10.1, 125.6],
 }
+// Visayas provinces and cities. Cities carry their own coordinates; provinces are the fallback centre.
+const VIS_PROVINCE: Record<string, LL> = {
+  Aklan: [11.7, 122.35], Antique: [11.0, 122.1], Capiz: [11.45, 122.75], Guimaras: [10.6, 122.6], Iloilo: [10.95, 122.55],
+  Bohol: [9.85, 124.15], Cebu: [10.3, 123.9], Biliran: [11.55, 124.45], 'Eastern Samar': [11.5, 125.5], Leyte: [10.9, 124.9],
+  'Northern Samar': [12.4, 124.6], Samar: [11.9, 125.0], 'Southern Leyte': [10.3, 125.1], 'Negros Occidental': [10.4, 123.0],
+  'Negros Oriental': [9.4, 123.1], Siquijor: [9.2, 123.55],
+}
+const VIS_CITY: Record<string, LL> = {
+  Boracay: [11.97, 121.92], Kalibo: [11.7, 122.37], 'Roxas City': [11.59, 122.75], 'Iloilo City': [10.72, 122.56],
+  'Cebu City': [10.32, 123.89], 'Mandaue City': [10.32, 123.94], 'Lapu-Lapu City': [10.31, 123.95], 'Talisay City': [10.24, 123.84],
+  'Danao City': [10.52, 124.03], 'Carcar City': [10.11, 123.64], 'Naga City': [10.21, 123.76], 'Bogo City': [11.05, 124.0],
+  'Tagbilaran City': [9.65, 123.85], 'Ormoc City': [11.0, 124.61], 'Baybay City': [10.68, 124.8], 'Tacloban City': [11.24, 125.0],
+  'Maasin City': [10.13, 124.84], 'Catbalogan City': [11.78, 124.89], 'Calbayog City': [12.07, 124.6], 'Borongan City': [11.61, 125.43],
+  'Dumaguete City': [9.31, 123.31], 'Bais City': [9.59, 123.12], 'Bayawan City': [9.37, 122.8], 'Canlaon City': [10.39, 123.2],
+  'Kabankalan City': [9.99, 122.82], 'San Carlos City': [10.49, 123.42], 'Guihulngan City': [10.12, 123.27],
+}
 const CITY: Record<string, LL> = {
   'Caloocan City': [14.65, 120.97], 'Quezon City': [14.68, 121.04], 'Manila City': [14.6, 120.98], 'Pasig City': [14.58, 121.06],
   'Taguig City': [14.52, 121.05], 'Makati City': [14.55, 121.02], 'Parañaque City': [14.48, 121.02], 'Muntinlupa City': [14.38, 121.04],
@@ -64,8 +88,8 @@ const CITY: Record<string, LL> = {
 function norm(s: string) {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\bcity\b/g, '').replace(/[^a-z ]/g, '').replace(/\s+/g, ' ').trim()
 }
-const CITY_N = new Map(Object.entries(CITY).map(([k, v]) => [norm(k), v]))
-const PROV_N = new Map(Object.entries(PROVINCE).map(([k, v]) => [norm(k), v]))
+const CITY_N = new Map(Object.entries({ ...CITY, ...VIS_CITY }).map(([k, v]) => [norm(k), v]))
+const PROV_N = new Map(Object.entries({ ...PROVINCE, ...VIS_PROVINCE }).map(([k, v]) => [norm(k), v]))
 
 /** Best-known centre for an area: its own city, else its province (either as a field or as the name). */
 export function areaCoords(a: FwArea): LL | null {
@@ -150,7 +174,114 @@ export function freshness(weekEnd: string, today = new Date()): Freshness {
 export function parseFuelData(raw: unknown): FwData | null {
   if (!raw || typeof raw !== 'object') return null
   const d = raw as Partial<FwData>
-  if (d.schema !== 1 || !Array.isArray(d.regions)) return null
+  if ((d.schema !== 1 && d.schema !== 2) || !Array.isArray(d.regions)) return null
   const regions = d.regions.filter((r): r is FwRegion => !!r && typeof r.id === 'string' && Array.isArray(r.areas))
-  return { schema: 1, generatedAt: String(d.generatedAt ?? ''), source: String(d.source ?? ''), problems: d.problems, regions }
+  const adjustments = (Array.isArray(d.adjustments) ? d.adjustments : []).filter(
+    (a): a is FwAdjustment => !!a && typeof a.weekStart === 'string' && typeof a.weekEnd === 'string' && !!a.brands && typeof a.brands === 'object',
+  )
+  return { schema: d.schema, generatedAt: String(d.generatedAt ?? ''), source: String(d.source ?? ''), problems: d.problems, regions, adjustments }
+}
+
+// ---- Announced weekly adjustments -------------------------------------------------------------
+export const productGroup = (p: FwProduct): 'gasoline' | 'diesel' | 'kerosene' =>
+  p === 'DIESEL' || p === 'DIESEL PLUS' ? 'diesel' : p === 'KEROSENE' ? 'kerosene' : 'gasoline'
+
+const addDaysISO = (iso: string, n: number) => {
+  const d = new Date(iso + 'T00:00:00Z')
+  d.setUTCDate(d.getUTCDate() + n)
+  return d.toISOString().slice(0, 10)
+}
+
+export interface Projected {
+  lo: number
+  hi: number
+  /** net change applied, PHP/L */
+  delta: number
+  /** weeks (start dates) whose announced change was applied */
+  weeks: string[]
+}
+
+/**
+ * Project a measured brand price forward using the oil companies' announced weekly changes.
+ *
+ * Only returns a value when the chain is complete: the measured week must be followed, week by week, by an
+ * adjustment for this brand and fuel group, up to the latest week that has started. A missing week or a brand
+ * that did not announce a change returns null - we never bridge a gap with a guess.
+ */
+export function projectPrice(
+  data: FwData, regionWeekStart: string, brand: string, product: FwProduct, range: [number, number], today: string,
+): Projected | null {
+  const group = productGroup(product)
+  const byStart = new Map(data.adjustments.map((a) => [a.weekStart, a]))
+  let week = addDaysISO(regionWeekStart, 7)
+  let delta = 0
+  const weeks: string[] = []
+  while (week <= today) {
+    const adj = byStart.get(week)
+    const v = adj?.brands[brand]?.[group]
+    if (v === undefined) return null // gap in the chain
+    delta += v
+    weeks.push(week)
+    week = addDaysISO(week, 7)
+  }
+  if (!weeks.length) return null // already current: nothing to project
+  return { lo: Math.round((range[0] + delta) * 100) / 100, hi: Math.round((range[1] + delta) * 100) / 100, delta: Math.round(delta * 100) / 100, weeks }
+}
+
+/** The latest week for which adjustments exist and have started. */
+export function latestAdjustmentWeek(data: FwData, today: string) {
+  return [...data.adjustments].filter((a) => a.weekStart <= today).sort((x, y) => (x.weekStart < y.weekStart ? 1 : -1))[0] ?? null
+}
+
+// ---- Area search -------------------------------------------------------------------------------
+export interface SearchHit { key: string; region: FwRegion; area: FwArea; label: string; score: number }
+export const areaKey = (r: FwRegion, a: FwArea) => `${r.id}|${a.province}|${a.name}`
+
+/**
+ * Find areas by typing part of a city, province or region name. Accent- and case-insensitive; every typed word
+ * must match somewhere (so "davao sur" finds Davao del Sur). Better matches rank first: exact name, then names
+ * that start with the query, then word starts, then anywhere.
+ */
+export function searchAreas(data: FwData, query: string, limit = 12): SearchHit[] {
+  const words = norm(query).split(' ').filter(Boolean)
+  if (!words.length) return []
+  const hits: SearchHit[] = []
+  for (const region of data.regions) {
+    for (const area of region.areas) {
+      const name = norm(area.name)
+      const hay = `${name} ${norm(area.province)} ${norm(region.label)}`
+      if (!words.every((w) => hay.includes(w))) continue
+      const q = words.join(' ')
+      let score = 4
+      if (name === q) score = 0
+      else if (name.startsWith(q)) score = 1
+      else if (words.every((w) => name.split(' ').some((t) => t.startsWith(w)))) score = 2
+      else if (words.every((w) => hay.split(' ').some((t) => t.startsWith(w)))) score = 3
+      hits.push({ key: areaKey(region, area), region, area, label: placeLabel(area), score })
+    }
+  }
+  return hits.sort((a, b) => a.score - b.score || a.label.localeCompare(b.label)).slice(0, limit)
+}
+
+export interface AreaPrice {
+  price: number
+  /** how many brand prices were projected forward with announced changes vs. left as measured */
+  projected: number
+  measured: number
+}
+
+/**
+ * Typical current price in an area: the median over brands of the estimated price when a complete chain of
+ * announced changes exists for that brand, otherwise the last measured midpoint. Brands are never mixed silently:
+ * the counts say how many were projected.
+ */
+export function typicalCurrent(data: FwData, region: FwRegion, a: FwArea, p: FwProduct, today: string): AreaPrice | null {
+  const mids: number[] = []
+  let projected = 0
+  for (const r of brandRows(a, p)) {
+    const proj = projectPrice(data, region.weekStart, r.brand, p, [r.lo, r.hi], today)
+    if (proj) { mids.push((proj.lo + proj.hi) / 2); projected++ } else mids.push(r.mid)
+  }
+  const m = median(mids)
+  return m === null ? null : { price: m, projected, measured: mids.length - projected }
 }

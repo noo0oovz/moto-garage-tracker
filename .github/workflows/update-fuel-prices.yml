@@ -1,9 +1,10 @@
 name: Update fuel prices
 
-# DOE publishes weekly price monitoring PDFs (typically Tuesday). Check a few times a week.
+# Companies announce each week's price change the Monday before it takes effect (DOE posts the summary that day),
+# and the area reports follow during the week. Check daily so "Est. now" is never a week behind.
 on:
   schedule:
-    - cron: '30 2 * * 2,3,5' # 10:30 PH time on Tue, Wed, Fri
+    - cron: '30 2 * * *' # 10:30 PH time, every day
   workflow_dispatch:
 
 permissions:
@@ -26,7 +27,7 @@ jobs:
       - run: npm ci
       # The importer exits non-zero (and writes nothing) if no region verifies.
       - name: Import DOE prices
-        run: node scripts/import-doe.mjs --out public/fuel-prices.json.new
+        run: node scripts/import-doe.mjs --out public/fuel-prices.json.new --prev public/fuel-prices.json
       - name: Validate before replacing
         run: |
           mv public/fuel-prices.json public/fuel-prices.json.bak 2>/dev/null || true
