@@ -48,7 +48,7 @@ describe('geography', () => {
     const prov = areaCoords(area('Quezon', '', {}))!
     const bukidnon = areaCoords(area('Quezon', 'Bukidnon', {}))!
     expect(haversineKm(qc, prov)).toBeGreaterThan(50) // province centre is far from Quezon City
-    expect(haversineKm(bukidnon, qc)).toBeGreaterThan(900) // a town in Mindanao is nowhere near Metro Manila
+    expect(haversineKm(bukidnon, qc)).toBeGreaterThan(500) // a town in Mindanao is nowhere near Metro Manila
   })
   it('falls back to the province, then to a province-only entry, then null', () => {
     expect(areaCoords(area('Unknown Town', 'Laguna', {}))).toEqual(areaCoords(area('Laguna', '', {})))

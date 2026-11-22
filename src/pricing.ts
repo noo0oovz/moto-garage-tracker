@@ -105,7 +105,7 @@ export function areaCoords(a: FwArea): LL | null {
   const full = keepCity(a.name)
   // A name written without "City" (the DOE sometimes prints "Bacoor", sometimes "Bacoor City") still finds the
   // city - but only when the area has no province of its own to say it is a different place (Quezon, Bukidnon).
-  const bare = a.province === '' && !/ city$/.test(full) ? CITY_N.get(full + ' city') : undefined
+  const bare = a.province === '' && !/ city$/.test(full) && !PROV_N.has(norm(a.name)) ? CITY_N.get(full + ' city') : undefined
   return CITY_N.get(full) ?? bare ?? PROV_N.get(norm(a.province)) ?? (a.province === '' ? PROV_N.get(norm(a.name)) : undefined) ?? null
 }
 
