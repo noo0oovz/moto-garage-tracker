@@ -23,6 +23,14 @@ const BRAND_STYLE: Record<string, string> = {
   PETRON: 'bg-blue-500', SHELL: 'bg-yellow-400', CALTEX: 'bg-red-500', PHOENIX: 'bg-orange-500', TOTAL: 'bg-rose-500',
   'FLYING V': 'bg-green-500', UNIOIL: 'bg-sky-500', SEAOIL: 'bg-cyan-500', PTT: 'bg-indigo-500', JETTI: 'bg-lime-500', 'MY GAS': 'bg-teal-500', 'CLEAN FUEL': 'bg-emerald-500', INDEPENDENT: 'bg-slate-400',
 }
+// User-facing island groups. "Luzon" is the South Luzon report (North Luzon is not available).
+const GROUPS = [
+  { id: 'ncr', label: 'NCR' },
+  { id: 'south-luzon', label: 'Luzon' },
+  { id: 'visayas', label: 'Visayas' },
+  { id: 'mindanao', label: 'Mindanao' },
+] as const
+const groupLabel = (regionId: string) => GROUPS.find((g) => g.id === regionId)?.label ?? regionId
 const titleCase = (s: string) => s.replace(/\w\S*/g, (w) => w[0] + w.slice(1).toLowerCase())
 // "−₱3.80" / "+₱3.50": the sign goes before the peso sign, with a real minus.
 const signed = (n: number) => `${n < 0 ? '−' : '+'}${peso(Math.abs(n), 2)}`
@@ -115,12 +123,62 @@ function AreaSearch({ data, value, onPick, placeholder }: { data: FwData; value:
               onMouseDown={(e) => { e.preventDefault(); pick(h.key) }} onMouseEnter={() => setActive(i)}
               className={`flex min-h-11 cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm ${i === active ? 'bg-orange-500/10' : ''}`}>
               <span className="min-w-0 truncate font-medium">{h.label}</span>
-              <span className="shrink-0 text-xs text-slate-400">{h.region.label}</span>
+              <span className="shrink-0 text-xs text-slate-400">{groupLabel(h.region.id)}</span>
             </li>
           ))}
         </ul>
       )}
     </div>
+  )
+}
+
+/** Browse by group (NCR / Luzon / Visayas / Mindanao), then pick a city; cities are split under their province. */
+function BrowseAreas({ data, value, onPick }: { data: FwData; value: string; onPick: (key: string) => void }) {
+  const groups = GROUPS.map((g) => ({ ...g, region: data.regions.find((r) => r.id === g.id) })).filter((g) => g.region)
+  const selectedGroup = data.regions.find((r) => r.areas.some((a) => makeKey(r, a) === value))?.id
+  const [open, setOpen] = useState<string>(selectedGroup ?? groups[0]?.id ?? '')
+  useEffect(() => { if (selectedGroup) setOpen(selectedGroup) }, [selectedGroup])
+  const current = groups.find((g) => g.id === open) ?? groups[0]
+  const byProvince = useMemo(() => {
+    const m = new Map<string, FwArea[]>()
+    for (const a of current?.region?.areas ?? []) m.set(a.province, [...(m.get(a.province) ?? []), a])
+    return [...m.entries()].sort(([a], [b]) => (a === '' ? -1 : b === '' ? 1 : a.localeCompare(b)))
+      .map(([prov, list]) => [prov, [...list].sort((x, y) => x.name.localeCompare(y.name))] as const)
+  }, [current])
+  if (!current?.region) return null
+  return (
+    <section aria-label="Browse areas" className="min-w-0">
+      <span className="label">Or browse by area</span>
+      <div role="tablist" aria-label="Island group" className="grid grid-cols-4 gap-1 rounded-xl bg-slate-100 p-1 dark:bg-black/30">
+        {groups.map((g) => (
+          <button key={g.id} role="tab" aria-selected={g.id === current.id} onClick={() => setOpen(g.id)}
+            className={`min-h-11 rounded-lg px-1 text-sm font-semibold transition ${g.id === current.id ? 'bg-orange-500 text-white shadow' : 'text-slate-500 dark:text-slate-300'}`}>
+            {g.label}<span className="ml-1 hidden text-xs opacity-70 sm:inline">{g.region!.areas.length}</span>
+          </button>
+        ))}
+      </div>
+      {current.id === 'south-luzon' && <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Calabarzon, Mimaropa and Bicol. North Luzon isn’t available yet.</p>}
+      <div role="tabpanel" aria-label={`${current.label} cities`} className="mt-2 max-h-80 space-y-3 overflow-y-auto rounded-xl border border-slate-200 p-2 dark:border-white/10">
+        {byProvince.map(([prov, list]) => (
+          <div key={prov || 'all'}>
+            {prov && <h3 className="px-1 pb-1 text-xs font-bold uppercase tracking-wide text-slate-500">{prov}</h3>}
+            <ul className="grid grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-4">
+              {list.map((a) => {
+                const k = makeKey(current.region!, a)
+                return (
+                  <li key={k}>
+                    <button onClick={() => onPick(k)} aria-pressed={k === value}
+                      className={`min-h-11 w-full rounded-lg px-2 text-left text-sm transition lg:min-h-9 ${k === value ? 'bg-orange-500 font-semibold text-white' : 'hover:bg-slate-100 dark:hover:bg-white/5'}`}>
+                      <span className="line-clamp-2">{a.name}</span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </section>
   )
 }
 
@@ -256,6 +314,8 @@ export function FuelWatchPage() {
           </div>
         </div>
       </section>
+
+      <BrowseAreas data={data} value={areaKey} onPick={choose} />
 
       {/* Brand comparison */}
       {focus && (
