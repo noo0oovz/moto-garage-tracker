@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Fuel, Paperclip, Plus, Trash2, ShieldCheck, Wrench, Cog } from 'lucide-react'
+import { Fuel, Paperclip, Pencil, Plus, Trash2, ShieldCheck, Wrench, Cog } from 'lucide-react'
 import { useStore } from './store'
 import { Empty } from './ui'
 import type { ModalState } from './modals'
@@ -61,6 +61,8 @@ export function FuelPage({ open }: { open: Open }) {
                 <p className="text-sm text-slate-500 dark:text-slate-400">{fmtDate(f.date)}</p>
                 <div className="flex items-center gap-1">
                   <span className="font-bold text-orange-500">{peso(f.totalCost, 2)}</span>
+                  <button aria-label="Edit fuel log" className="grid h-11 w-11 place-items-center rounded-xl text-slate-400 hover:text-orange-500"
+                    onClick={() => open({ kind: 'log', tab: 'fuel', editFuel: f })}><Pencil size={16} /></button>
                   <button aria-label="Delete fuel log" className="grid h-11 w-11 place-items-center rounded-xl text-slate-400 hover:text-red-500"
                     onClick={() => { if (confirm('Delete this fuel log?')) deleteLog('fuel', f.id) }}><Trash2 size={16} /></button>
                 </div>
@@ -86,7 +88,7 @@ export function FuelPage({ open }: { open: Open }) {
   )
 }
 
-export function HistoryPage() {
+export function HistoryPage({ open }: { open: Open }) {
   const { state, vehicle, deleteService } = useStore()
   const [range, setRange] = useState<number | null>(null)
   const [q, setQ] = useState('')
@@ -118,6 +120,8 @@ export function HistoryPage() {
               <span className="absolute inset-y-3 left-0 w-1 rounded-r bg-orange-500" aria-hidden />
               <div className="flex items-start justify-between gap-2">
                 <h3 className="min-w-0 text-sm font-bold leading-snug">{s.name}</h3>
+                <button aria-label="Edit service record" className="-mt-2 ml-auto grid h-11 w-11 shrink-0 place-items-center rounded-xl text-slate-400 hover:text-orange-500"
+                  onClick={() => open({ kind: 'editService', item: s })}><Pencil size={16} /></button>
                 <button aria-label="Delete service record" className="-mr-2 -mt-2 grid h-11 w-11 shrink-0 place-items-center rounded-xl text-slate-400 hover:text-red-500"
                   onClick={() => { if (confirm('Delete this service record (and its linked expense)?')) deleteService(s.id) }}><Trash2 size={16} /></button>
               </div>
@@ -172,6 +176,8 @@ export function PartsPage({ open }: { open: Open }) {
                       {[p.brand, p.description, p.partNumber && `#${p.partNumber}`].filter(Boolean).join(' · ') || p.condition}
                     </p>
                   </div>
+                  <button aria-label="Edit part" className="-mt-2 grid h-11 w-11 shrink-0 place-items-center rounded-xl text-slate-400 hover:text-orange-500"
+                    onClick={() => open({ kind: 'part', item: p })}><Pencil size={16} /></button>
                   <button aria-label="Delete part" className="-mr-2 -mt-2 grid h-11 w-11 shrink-0 place-items-center rounded-xl text-slate-400 hover:text-red-500"
                     onClick={() => { if (confirm('Delete this part record (and its linked expense)?')) deletePart(p.id) }}><Trash2 size={16} /></button>
                 </div>

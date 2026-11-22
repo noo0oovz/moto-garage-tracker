@@ -172,5 +172,6 @@ export function buildDemoState(today: string): AppState {
     checklist: {},
     activeVehicleId: hilux.id,
     theme: 'dark',
+    installedAt: new Date().toISOString(),
   }
 }

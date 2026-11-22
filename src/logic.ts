@@ -1,4 +1,4 @@
-import type { CodingDay, Expense, FuelLog, MaintItem, Vehicle } from './types'
+import type { CodingDay, Expense, FuelLog, MaintItem, ServiceRecord, Vehicle } from './types'
 
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4)
 
@@ -181,6 +181,39 @@ export function warrantyInfo(p: { date: string; warrantyMonths?: number }, today
   const end = addMonths(p.date, p.warrantyMonths)
   const days = daysBetween(today, end)
   return { end, days, active: days >= 0 }
+}
+
+/** Latest service record for a maintenance item (by date, then odometer). */
+export function latestService(services: ServiceRecord[], maintItemId?: string) {
+  if (!maintItemId) return undefined
+  return services
+    .filter((s) => s.maintItemId === maintItemId)
+    .sort((a, b) => (a.date === b.date ? b.odometer - a.odometer : a.date < b.date ? 1 : -1))[0]
+}
+
+/** Insert, update or remove the expense linked (via sourceId) to a part/service record. */
+export function syncLinkedExpense(
+  expenses: Expense[],
+  sourceId: string,
+  next: Omit<Expense, 'id' | 'sourceId'> | null,
+): Expense[] {
+  if (!next) return expenses.filter((x) => x.sourceId !== sourceId)
+  if (expenses.some((x) => x.sourceId === sourceId)) {
+    return expenses.map((x) => (x.sourceId === sourceId ? { ...x, ...next } : x))
+  }
+  return [...expenses, { ...next, id: uid(), sourceId }]
+}
+
+export interface BackupStatus { days: number | null; never: boolean; due: boolean }
+
+/** Nudge after 7 days if never backed up, otherwise after 30 days since the last backup. */
+export function backupStatus(s: { installedAt?: string; lastBackupAt?: string }, now = new Date()): BackupStatus {
+  const never = !s.lastBackupAt
+  const ref = s.lastBackupAt ?? s.installedAt
+  const t = ref ? new Date(ref).getTime() : NaN
+  if (!Number.isFinite(t)) return { days: null, never, due: false }
+  const days = Math.max(0, Math.floor((now.getTime() - t) / 86400000))
+  return { days, never, due: days >= (never ? 7 : 30) }
 }
 
 export function csvEscape(v: unknown) {

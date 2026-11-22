@@ -1,28 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { AppState, Expense, FuelLog, MaintItem, PartRecord, ServiceRecord, Vehicle } from './types'
-import { SCHEMA_VERSION, STORAGE_KEY, buildDemoState, buildMaintenance } from './data'
-import { todayISO, uid } from './logic'
-
-function migrate(raw: unknown): AppState | null {
-  if (!raw || typeof raw !== 'object') return null
-  const s = raw as Partial<AppState>
-  if (!Array.isArray(s.vehicles) || !Array.isArray(s.maint) || !Array.isArray(s.fuel) || !Array.isArray(s.expenses)) return null
-  // Future schema migrations hook in here keyed on s.version.
-  const vehicles = s.vehicles
-  return {
-    version: SCHEMA_VERSION,
-    vehicles,
-    maint: s.maint,
-    fuel: s.fuel,
-    expenses: s.expenses,
-    // v1 -> v2: service history and parts ledger were added.
-    services: Array.isArray(s.services) ? s.services : [],
-    parts: Array.isArray(s.parts) ? s.parts : [],
-    checklist: s.checklist ?? {},
-    activeVehicleId: vehicles.some((v) => v.id === s.activeVehicleId) ? (s.activeVehicleId as string) : (vehicles[0]?.id ?? ''),
-    theme: s.theme === 'light' ? 'light' : 'dark',
-  }
-}
+import { STORAGE_KEY, buildDemoState, buildMaintenance } from './data'
+import { latestService, syncLinkedExpense, todayISO, uid } from './logic'
+import { migrate } from './migrate'
 
 function load(): AppState {
   try {
@@ -54,6 +34,11 @@ interface Store {
   deleteMaint: (id: string) => void
   markServiced: (id: string, p: ServicePayload) => void
   deleteService: (id: string) => void
+  updateService: (id: string, p: Partial<Omit<ServiceRecord, 'id' | 'vehicleId'>>) => void
+  updatePart: (id: string, p: Omit<PartRecord, 'id' | 'vehicleId'>) => void
+  updateFuel: (id: string, f: Omit<FuelLog, 'id' | 'vehicleId'>) => void
+  updateExpense: (id: string, e: Omit<Expense, 'id' | 'vehicleId'>) => void
+  markBackedUp: () => void
   addPart: (p: Omit<PartRecord, 'id'>) => void
   deletePart: (id: string) => void
   addFuel: (f: Omit<FuelLog, 'id'>) => void
@@ -130,6 +115,42 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         : s.expenses
       return { ...s, maint, expenses, services: [...s.services, record], vehicles: bumpOdo(s.vehicles, item.vehicleId, p.odometer) }
     }),
+    updateService: (id, p) => setState((s) => {
+      const cur = s.services.find((x) => x.id === id)
+      if (!cur) return s
+      const next = { ...cur, ...p }
+      const services = s.services.map((x) => (x.id === id ? next : x))
+      const expenses = syncLinkedExpense(s.expenses, id, next.cost && next.cost > 0
+        ? { vehicleId: next.vehicleId, date: next.date, category: 'PMS & Fluids', cost: next.cost, shopName: next.shopName ?? '', notes: next.name, odometer: next.odometer }
+        : null)
+      // If this is the newest record for its maintenance item, keep the item's "last service" in step.
+      let maint = s.maint
+      if (next.maintItemId) {
+        const newest = latestService(services, next.maintItemId)
+        if (newest) maint = maint.map((m) => (m.id === next.maintItemId ? { ...m, lastServiceKm: newest.odometer, lastServiceDate: newest.date } : m))
+      }
+      return { ...s, services, expenses, maint, vehicles: bumpOdo(s.vehicles, next.vehicleId, next.odometer) }
+    }),
+    updatePart: (id, p) => setState((s) => {
+      const cur = s.parts.find((x) => x.id === id)
+      if (!cur) return s
+      const next: PartRecord = { ...p, id, vehicleId: cur.vehicleId }
+      const expenses = syncLinkedExpense(s.expenses, id, next.amount > 0
+        ? { vehicleId: next.vehicleId, date: next.date, category: 'Wear & Tear Parts', cost: next.amount, shopName: next.shop, notes: `${next.partType}${next.brand ? ` (${next.brand})` : ''}`, odometer: next.installedKm }
+        : null)
+      return { ...s, parts: s.parts.map((x) => (x.id === id ? next : x)), expenses, vehicles: bumpOdo(s.vehicles, next.vehicleId, next.installedKm) }
+    }),
+    updateFuel: (id, f) => setState((s) => {
+      const cur = s.fuel.find((x) => x.id === id)
+      if (!cur) return s
+      return { ...s, fuel: s.fuel.map((x) => (x.id === id ? { ...f, id, vehicleId: cur.vehicleId } : x)), vehicles: bumpOdo(s.vehicles, cur.vehicleId, f.odometer) }
+    }),
+    updateExpense: (id, e) => setState((s) => {
+      const cur = s.expenses.find((x) => x.id === id)
+      if (!cur) return s
+      return { ...s, expenses: s.expenses.map((x) => (x.id === id ? { ...e, id, vehicleId: cur.vehicleId, sourceId: cur.sourceId } : x)), vehicles: bumpOdo(s.vehicles, cur.vehicleId, e.odometer) }
+    }),
+    markBackedUp: () => setState((s) => ({ ...s, lastBackupAt: new Date().toISOString() })),
     deleteService: (id) => setState((s) => ({
       ...s, services: s.services.filter((x) => x.id !== id), expenses: s.expenses.filter((e) => e.sourceId !== id),
     })),

@@ -8,7 +8,7 @@ import { Empty, Progress } from './ui'
 import type { ModalState } from './modals'
 import type { Page, Vehicle } from './types'
 import {
-  buildLedger, codingStatus, csvEscape, fmtDate, fuelEfficiency, loggedKmSpan, maintHealth, num, peso, spendSummary, statusColor,
+  backupStatus, buildLedger, codingStatus, csvEscape, fmtDate, fuelEfficiency, loggedKmSpan, maintHealth, num, peso, spendSummary, statusColor,
 } from './logic'
 import { CHECKLIST_CAR, CHECKLIST_MOTO } from './data'
 
@@ -140,6 +140,21 @@ export function LogsPage({ open }: { open: Open }) {
     (!q || `${r.place} ${r.desc} ${r.category}`.toLowerCase().includes(q.toLowerCase())))
   const max = Math.max(1, ...Object.values(sum.byCat))
   const del = (r: (typeof rows)[number]) => { if (confirm('Delete this entry?')) deleteLog(r.kind, r.id) }
+  const linked = (r: (typeof rows)[number]) => r.kind === 'expense' && !!state.expenses.find((x) => x.id === r.id)?.sourceId
+  const edit = (r: (typeof rows)[number]) => {
+    if (r.kind === 'fuel') {
+      const f = state.fuel.find((x) => x.id === r.id)
+      if (f) open({ kind: 'log', tab: 'fuel', editFuel: f })
+    } else {
+      const x = state.expenses.find((e) => e.id === r.id)
+      if (x) open({ kind: 'log', tab: 'expense', editExpense: x })
+    }
+  }
+  const EditBtn = ({ r }: { r: (typeof rows)[number] }) => linked(r) ? (
+    <span className="grid h-11 w-11 place-items-center text-slate-300 dark:text-white/20" title="Edit this from Service History or Parts"><Pencil size={16} /></span>
+  ) : (
+    <button aria-label="Edit" className="grid h-11 w-11 place-items-center rounded-xl text-slate-400 hover:text-orange-500" onClick={() => edit(r)}><Pencil size={16} /></button>
+  )
 
   return (
     <div className="page space-y-5">
@@ -191,6 +206,7 @@ export function LogsPage({ open }: { open: Open }) {
                     {r.desc && <p className="truncate text-xs text-slate-500 dark:text-slate-400">{r.desc}</p>}
                   </div>
                   <span className="text-sm font-bold">{peso(r.cost, 2)}</span>
+                  <EditBtn r={r} />
                   <button aria-label="Delete" className="grid h-11 w-11 place-items-center rounded-xl text-slate-400 hover:text-red-500" onClick={() => del(r)}><Trash2 size={16} /></button>
                 </li>
               ))}
@@ -211,7 +227,7 @@ export function LogsPage({ open }: { open: Open }) {
                       <td className="px-4 py-3">{r.odometer ? `${num(r.odometer)} km` : '—'}</td>
                       <td className="px-4 py-3">{r.kmPerL ? r.kmPerL.toFixed(1) : '—'}</td>
                       <td className="px-4 py-3 text-right font-semibold">{peso(r.cost, 2)}</td>
-                      <td className="px-2 py-1"><button aria-label="Delete" className="grid h-11 w-11 place-items-center rounded-xl text-slate-400 hover:text-red-500" onClick={() => del(r)}><Trash2 size={16} /></button></td>
+                      <td className="whitespace-nowrap px-2 py-1"><div className="flex"><EditBtn r={r} /><button aria-label="Delete" className="grid h-11 w-11 place-items-center rounded-xl text-slate-400 hover:text-red-500" onClick={() => del(r)}><Trash2 size={16} /></button></div></td>
                     </tr>
                   ))}
                 </tbody>
@@ -315,7 +331,8 @@ export function VehiclesPage({ open }: { open: Open }) {
 }
 
 export function SettingsPage() {
-  const { state, importState, resetDemo, toggleTheme } = useStore()
+  const { state, importState, resetDemo, toggleTheme, markBackedUp } = useStore()
+  const backup = backupStatus(state)
   const fileRef = useRef<HTMLInputElement>(null)
   const [msg, setMsg] = useState('')
 
@@ -360,7 +377,9 @@ export function SettingsPage() {
       </section>
       <section className="card p-2">
         <h2 className="px-3 pb-1 pt-2 text-xs font-bold uppercase tracking-wide text-slate-500">Data &amp; Backup</h2>
-        <Row icon={Download} title="Export JSON Backup" sub="Everything, in one file you own" onClick={() => download(`motogarage-backup-${stamp}.json`, JSON.stringify(state, null, 2), 'application/json')} />
+        <Row icon={Download} title="Export JSON Backup"
+          sub={backup.never ? 'Never backed up — everything lives only in this browser' : `Last backup ${backup.days === 0 ? 'today' : `${backup.days} day${backup.days === 1 ? '' : 's'} ago`}`}
+          onClick={() => { download(`motogarage-backup-${stamp}.json`, JSON.stringify({ ...state, lastBackupAt: new Date().toISOString() }, null, 2), 'application/json'); markBackedUp() }} />
         <Row icon={Upload} title="Import JSON Backup" sub="Replaces current data" onClick={() => fileRef.current?.click()} />
         <Row icon={FileSpreadsheet} title="Export Logs to CSV" sub="Fuel & expenses for spreadsheets" onClick={exportCsv} />
         <Row icon={RotateCcw} danger title="Reset Demo Data" sub="Erase everything and restore the sample garage"

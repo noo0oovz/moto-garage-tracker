@@ -102,6 +102,8 @@ export interface AppState {
   expenses: Expense[]
   services: ServiceRecord[]
   parts: PartRecord[]
+  installedAt?: string // ISO timestamp, baseline for the backup reminder
+  lastBackupAt?: string // ISO timestamp of the last JSON export/import
   checklist: Record<string, string[]> // vehicleId -> checked keys
   activeVehicleId: string
   theme: ThemeMode

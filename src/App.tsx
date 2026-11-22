@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import {
-  Bike, Car, Cog, Fuel, History, LayoutDashboard, ListChecks, MoreHorizontal, Moon, Plus, Receipt, Settings, Sun, Wrench,
+  Bike, Car, Cog, DatabaseBackup, Fuel, History, LayoutDashboard, ListChecks, MoreHorizontal, Moon, Plus, Receipt, Settings, Sun, Wrench,
 } from 'lucide-react'
 import { useStore } from './store'
 import { Modals, type ModalState } from './modals'
 import { ChecklistPage, CodingBanner, GaragePage, LogsPage, MorePage, SettingsPage, VehiclesPage } from './pages'
 import { FuelPage, HistoryPage, PartsPage } from './pages2'
 import type { Page } from './types'
-import { num } from './logic'
+import { backupStatus, num } from './logic'
 
 const NAV: { page: Page; label: string; icon: typeof Car }[] = [
   { page: 'garage', label: 'Garage', icon: LayoutDashboard },
@@ -108,11 +108,20 @@ export default function App() {
           <button className="btn-ghost" onClick={() => open({ kind: 'log', tab: 'expense' })}><Plus size={16} /> Log Service</button>
         </header>
 
+        {backupStatus(state).due && page !== 'settings' && (
+          <div role="status" className="mx-auto mt-3 flex w-[calc(100%-2rem)] max-w-7xl items-center gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300 md:w-[calc(100%-3rem)]">
+            <DatabaseBackup size={18} className="shrink-0" />
+            <span className="min-w-0 flex-1">
+              {backupStatus(state).never ? 'You haven’t backed up yet.' : `Last backup was ${backupStatus(state).days} days ago.`} Your data only lives in this browser.
+            </span>
+            <button className="btn-ghost !min-h-11 shrink-0" onClick={() => setPage('settings')}>Back up</button>
+          </div>
+        )}
         <main className="mx-auto w-full max-w-7xl px-4 pb-28 pt-4 md:px-6 md:pb-10 md:pt-6">
           {page === 'garage' && <GaragePage open={open} />}
           {page === 'logs' && <LogsPage open={open} />}
           {page === 'fuel' && <FuelPage open={open} />}
-          {page === 'history' && <HistoryPage />}
+          {page === 'history' && <HistoryPage open={open} />}
           {page === 'parts' && <PartsPage open={open} />}
           {page === 'checklist' && <ChecklistPage />}
           {page === 'more' && <MorePage go={setPage} />}
