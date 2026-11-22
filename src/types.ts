@@ -109,4 +109,4 @@ export interface AppState {
   theme: ThemeMode
 }
 
-export type Page = 'garage' | 'logs' | 'checklist' | 'more' | 'vehicles' | 'settings' | 'fuel' | 'history' | 'parts'
+export type Page = 'garage' | 'logs' | 'checklist' | 'more' | 'vehicles' | 'settings' | 'fuel' | 'history' | 'parts' | 'fuelwatch'

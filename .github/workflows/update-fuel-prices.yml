@@ -1,0 +1,55 @@
+name: Update fuel prices
+
+# DOE publishes weekly price monitoring PDFs (typically Tuesday). Check a few times a week.
+on:
+  schedule:
+    - cron: '30 2 * * 2,3,5' # 10:30 PH time on Tue, Wed, Fri
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write # lets this job start the deploy workflow (pushes by GITHUB_TOKEN don't trigger it)
+
+concurrency:
+  group: fuel-prices
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # The importer exits non-zero (and writes nothing) if no region verifies.
+      - name: Import DOE prices
+        run: node scripts/import-doe.mjs --out public/fuel-prices.json.new
+      - name: Validate before replacing
+        run: |
+          mv public/fuel-prices.json public/fuel-prices.json.bak 2>/dev/null || true
+          mv public/fuel-prices.json.new public/fuel-prices.json
+          if ! npm test; then
+            mv public/fuel-prices.json.bak public/fuel-prices.json 2>/dev/null || true
+            echo "::error::New fuel-prices.json failed validation; keeping the previous file."
+            exit 1
+          fi
+          rm -f public/fuel-prices.json.bak
+      - name: Commit if changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if node scripts/prices-changed.mjs; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add public/fuel-prices.json
+            git commit -m "Update DOE fuel prices"
+            git push
+            # Commits made with GITHUB_TOKEN don't fire the push trigger, so start the deploy explicitly.
+            gh workflow run deploy.yml --ref main
+          else
+            echo "Prices unchanged (only the timestamp differs); nothing to commit."
+            git checkout -- public/fuel-prices.json
+          fi

@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import {
   AlarmClockCheck, CalendarClock, Check, ChevronRight, Download, Fuel, Gauge, Pencil, Plus, RotateCcw, Trash2,
-  Upload, Wallet, Wrench, FileSpreadsheet, Cog, ShieldAlert, ShieldCheck, ShieldQuestion, Car, Bike, TrendingUp,
+  Upload, Wallet, Wrench, FileSpreadsheet, Cog, MapPin, ShieldAlert, ShieldCheck, ShieldQuestion, Car, Bike, TrendingUp,
 } from 'lucide-react'
 import { useStore } from './store'
 import { Empty, Progress } from './ui'
@@ -51,7 +51,7 @@ function Kpi({ icon: Icon, label, value, sub }: { icon: typeof Gauge; label: str
   )
 }
 
-export function GaragePage({ open }: { open: Open }) {
+export function GaragePage({ open, go }: { open: Open; go: (p: Page) => void }) {
   const { state, vehicle } = useStore()
   const data = useMemo(() => {
     if (!vehicle) return null
@@ -69,8 +69,15 @@ export function GaragePage({ open }: { open: Open }) {
 
   return (
     <div className="page space-y-5">
-      <div className="lg:hidden"><CodingBanner v={vehicle} /></div>
-      <div className="hidden lg:block"><CodingBanner v={vehicle} /></div>
+      <CodingBanner v={vehicle} />
+      <button onClick={() => go('fuelwatch')} className="card flex min-h-14 w-full items-center gap-3 p-3 text-left transition hover:border-orange-500/50">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-orange-500/15 text-orange-500"><MapPin size={20} /></span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-bold">Fuel Watch</span>
+          <span className="block truncate text-xs text-slate-500 dark:text-slate-400">Compare Petron, Shell, Caltex &amp; more, or estimate the price near you</span>
+        </span>
+        <ChevronRight size={16} className="text-slate-400" />
+      </button>
 
       <div className="no-scrollbar -mx-4 flex snap-x gap-3 overflow-x-auto px-4 md:mx-0 md:grid md:grid-cols-2 md:overflow-visible md:px-0 lg:grid-cols-4">
         <Kpi icon={Gauge} label="Odometer" value={`${num(vehicle.odometer)} km`} sub={`~${vehicle.avgDailyKm} km/day`} />
@@ -394,6 +401,7 @@ export function SettingsPage() {
 
 export function MorePage({ go }: { go: (p: Page) => void }) {
   const items: { p: Page; icon: typeof Car; title: string; sub: string }[] = [
+    { p: 'fuelwatch', icon: Gauge, title: 'Fuel Watch', sub: 'PH pump prices by brand, near you' },
     { p: 'fuel', icon: Fuel, title: 'Fuel Logs', sub: 'Fill-ups, litres and km/L' },
     { p: 'history', icon: Wrench, title: 'Service History', sub: 'Timeline of every service' },
     { p: 'parts', icon: Cog, title: 'Parts & Accessories', sub: 'Part records and warranties' },

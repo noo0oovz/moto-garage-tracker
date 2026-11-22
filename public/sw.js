@@ -20,6 +20,13 @@ self.addEventListener('fetch', (e) => {
     )
     return
   }
+  // Price data changes weekly: network first (fresh when online), cached copy when offline.
+  if (req.url.includes('fuel-prices.json')) {
+    e.respondWith(
+      fetch(req).then((res) => { if (res.ok) caches.open(CACHE).then((c) => c.put(req, res.clone())); return res }).catch(() => caches.match(req)),
+    )
+    return
+  }
   // Hashed assets: cache first, fill on miss.
   e.respondWith(
     caches.match(req).then((hit) => hit || fetch(req).then((res) => {
