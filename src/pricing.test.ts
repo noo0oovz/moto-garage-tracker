@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import fs from 'node:fs'
 import {
-  areaCoords, areaKey, brandRows, estimateAt, freshness, haversineKm, latestAdjustmentWeek, nearestAreas, parseFuelData, productGroup, projectPrice, searchAreas, typicalCurrent, typicalPrice,
+  areaCoords, areaKey, brandRows, estimateAt, freshness, haversineKm, latestAdjustmentWeek, nearbyFallback, nearestAreas, parseFuelData, productGroup, projectPrice, searchAreas, typicalCurrent, typicalPrice,
   type FwArea, type FwData,
 } from './pricing'
 import { parseWeek } from '../scripts/week.mjs'
@@ -42,6 +42,13 @@ describe('geography', () => {
   it('places cities by name, ignoring accents and the word "City"', () => {
     expect(areaCoords(area('Parañaque City', '', {}))).toEqual(areaCoords(area('Paranaque', '', {})))
     expect(areaCoords(area('Parañaque City', '', {}))).not.toBeNull()
+  })
+  it('keeps same-named places apart: Quezon City, Quezon province and Quezon in Bukidnon', () => {
+    const qc = areaCoords(area('Quezon City', '', {}))!
+    const prov = areaCoords(area('Quezon', '', {}))!
+    const bukidnon = areaCoords(area('Quezon', 'Bukidnon', {}))!
+    expect(haversineKm(qc, prov)).toBeGreaterThan(50) // province centre is far from Quezon City
+    expect(haversineKm(bukidnon, qc)).toBeGreaterThan(900) // a town in Mindanao is nowhere near Metro Manila
   })
   it('falls back to the province, then to a province-only entry, then null', () => {
     expect(areaCoords(area('Unknown Town', 'Laguna', {}))).toEqual(areaCoords(area('Laguna', '', {})))
@@ -249,5 +256,23 @@ describe('typicalCurrent', () => {
   })
   it('is null for a product with no data', () => {
     expect(typicalCurrent(data([a]), region([a]), a, 'DIESEL', '2026-11-20')).toBeNull()
+  })
+})
+
+describe('nearbyFallback (towns DOE does not monitor)', () => {
+  const d: FwData = { ...data([]), regions: [{ id: 'ncr', label: 'NCR', weekStart: '', weekEnd: '', sources: [], areas: [area('Marikina City', '', {}), area('Quezon City', '', {})] }, { id: 'south-luzon', label: 'S', weekStart: '', weekEnd: '', sources: [], areas: [area('Antipolo', 'Rizal', {})] }] }
+  it('offers the closest monitored areas for San Mateo, Rizal', () => {
+    const f = nearbyFallback(d, 'san mateo rizal')!
+    expect(f.town).toBe('San Mateo')
+    expect(f.near[0].place.area.name).toBe('Marikina City') // ~6 km
+    expect(f.near.every((n) => n.km <= 40)).toBe(true)
+  })
+  it('also works for just the town name, in any case', () => {
+    expect(nearbyFallback(d, 'SAN MATEO')?.town).toBe('San Mateo')
+    expect(nearbyFallback(d, 'cainta')?.town).toBe('Cainta')
+  })
+  it('returns null for unknown places and very short input', () => {
+    expect(nearbyFallback(d, 'atlantis')).toBeNull()
+    expect(nearbyFallback(d, 'sa')).toBeNull()
   })
 })

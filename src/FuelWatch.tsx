@@ -5,7 +5,7 @@ import { useStore } from './store'
 import { fmtDate, peso } from './logic'
 import {
   FW_PRODUCTS, areaKey as makeKey, brandRows, estimateAt, freshness, latestAdjustmentWeek, nearestAreas, parseFuelData, placeLabel,
-  productGroup, projectPrice, searchAreas, typicalCurrent,
+  nearbyFallback, productGroup, projectPrice, searchAreas, typicalCurrent,
   type FwArea, type FwData, type FwProduct, type FwRegion,
 } from './pricing'
 
@@ -75,6 +75,7 @@ function AreaSearch({ data, value, onPick, placeholder }: { data: FwData; value:
   const [active, setActive] = useState(0)
   const box = useRef<HTMLDivElement>(null)
   const hits = useMemo(() => searchAreas(data, q, 10), [data, q])
+  const fallback = useMemo(() => (hits.length === 0 ? nearbyFallback(data, q) : null), [data, q, hits.length])
   const selected = useMemo(() => {
     for (const r of data.regions) for (const a of r.areas) if (makeKey(r, a) === value) return placeLabel(a)
     return ''
@@ -116,8 +117,24 @@ function AreaSearch({ data, value, onPick, placeholder }: { data: FwData; value:
       {show && (
         <ul id={`${id}-list`} role="listbox" aria-label="Matching areas"
           className="anim-pop absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl dark:border-white/10 dark:bg-[#131a26]">
-          {hits.length === 0 ? (
-            <li role="presentation" className="px-3 py-3 text-sm text-slate-500">No monitored area matches “{q.trim()}”. Try a nearby city or the province name.</li>
+          {hits.length === 0 && fallback ? (
+            <>
+              <li role="presentation" className="px-3 pb-1 pt-2 text-xs text-slate-500">
+                DOE doesn’t monitor {fallback.town}, {fallback.province}. Nearest monitored areas:
+              </li>
+              {fallback.near.map((n) => {
+                const k = makeKey(n.place.region, n.place.area)
+                return (
+                  <li key={k} role="option" aria-selected="false" onMouseDown={(e) => { e.preventDefault(); pick(k) }}
+                    className="flex min-h-11 cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm hover:bg-orange-500/10">
+                    <span className="min-w-0 truncate font-medium">{n.place.label}</span>
+                    <span className="shrink-0 text-xs text-slate-400">{Math.round(n.km)} km away</span>
+                  </li>
+                )
+              })}
+            </>
+          ) : hits.length === 0 ? (
+            <li role="presentation" className="px-3 py-3 text-sm text-slate-500">No monitored area matches “{q.trim()}”. DOE only reports selected cities and towns; try a nearby city or the province name.</li>
           ) : hits.map((h, i) => (
             <li key={h.key} id={`${id}-o${i}`} role="option" aria-selected={i === active}
               onMouseDown={(e) => { e.preventDefault(); pick(h.key) }} onMouseEnter={() => setActive(i)}

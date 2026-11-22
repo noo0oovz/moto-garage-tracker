@@ -88,12 +88,25 @@ const CITY: Record<string, LL> = {
 function norm(s: string) {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\bcity\b/g, '').replace(/[^a-z ]/g, '').replace(/\s+/g, ' ').trim()
 }
-const CITY_N = new Map(Object.entries({ ...CITY, ...VIS_CITY }).map(([k, v]) => [norm(k), v]))
+// City names are matched with the word "city" kept, so "Quezon City" (Metro Manila) is never confused with the
+// town of Quezon in Bukidnon or the province of Quezon. "Dasmariñas" and "Dasmariñas City" are both accepted.
+const keepCity = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z ]/g, '').replace(/\s+/g, ' ').trim()
+const CITY_N = new Map<string, LL>()
+for (const [k, v] of Object.entries({ ...CITY, ...VIS_CITY })) {
+  CITY_N.set(keepCity(k), v)
+  if (/ city$/.test(keepCity(k)) === false) CITY_N.set(keepCity(k) + ' city', v)
+}
 const PROV_N = new Map(Object.entries({ ...PROVINCE, ...VIS_PROVINCE }).map(([k, v]) => [norm(k), v]))
 
 /** Best-known centre for an area: its own city, else its province (either as a field or as the name). */
 export function areaCoords(a: FwArea): LL | null {
-  return CITY_N.get(norm(a.name)) ?? PROV_N.get(norm(a.province)) ?? PROV_N.get(norm(a.name)) ?? null
+  // A town's own name may coincide with a different province's (Quezon, Bukidnon vs. Quezon province). Only treat
+  // the name as a province when the DOE row carries no province of its own (e.g. "Masbate", "Palawan").
+  const full = keepCity(a.name)
+  // A name written without "City" (the DOE sometimes prints "Bacoor", sometimes "Bacoor City") still finds the
+  // city - but only when the area has no province of its own to say it is a different place (Quezon, Bukidnon).
+  const bare = a.province === '' && !/ city$/.test(full) ? CITY_N.get(full + ' city') : undefined
+  return CITY_N.get(full) ?? bare ?? PROV_N.get(norm(a.province)) ?? (a.province === '' ? PROV_N.get(norm(a.name)) : undefined) ?? null
 }
 
 export function haversineKm(a: LL, b: LL) {
@@ -284,4 +297,34 @@ export function typicalCurrent(data: FwData, region: FwRegion, a: FwArea, p: FwP
   }
   const m = median(mids)
   return m === null ? null : { price: m, projected, measured: mids.length - projected }
+}
+
+// ---- Towns DOE does not monitor ------------------------------------------------------------------
+// DOE reports a selected set of cities and municipalities, so many towns people look for are missing (e.g. San
+// Mateo, Rizal). For those we offer the nearest monitored areas instead of a dead end. Only towns whose position
+// is well known are listed; anything else still gets the "no match" message.
+const UNLISTED: [string, string, LL][] = [
+  ['San Mateo', 'Rizal', [14.696, 121.121]], ['Rodriguez (Montalban)', 'Rizal', [14.76, 121.14]], ['Cainta', 'Rizal', [14.578, 121.122]],
+  ['Taytay', 'Rizal', [14.57, 121.133]], ['Angono', 'Rizal', [14.527, 121.153]], ['Binangonan', 'Rizal', [14.465, 121.192]],
+  ['Pateros', 'Metro Manila', [14.545, 121.068]], ['San Juan', 'Metro Manila', [14.6, 121.03]], ['Mandaluyong', 'Metro Manila', [14.579, 121.036]],
+  ['Las Piñas', 'Metro Manila', [14.45, 120.98]], ['Malabon', 'Metro Manila', [14.66, 120.957]], ['Bulacan (Meycauayan)', 'Bulacan', [14.737, 120.96]],
+  ['San Jose del Monte', 'Bulacan', [14.81, 121.05]], ['Malolos', 'Bulacan', [14.843, 120.811]], ['Marilao', 'Bulacan', [14.757, 120.95]],
+  ['Santa Maria', 'Bulacan', [14.82, 121.0]], ['Sta. Rosa', 'Laguna', [14.31, 121.11]], ['Silang', 'Cavite', [14.23, 120.97]],
+]
+
+export interface NearbyFallback { town: string; province: string; near: Nearest[] }
+
+/** When a search finds nothing, see if it names a known unmonitored town and return the closest monitored areas. */
+export function nearbyFallback(data: FwData, query: string): NearbyFallback | null {
+  const q = norm(query)
+  if (q.length < 3) return null
+  const hit = UNLISTED.find(([name, prov]) => {
+    const n = norm(name)
+    return n.includes(q) || q.includes(n) || (norm(`${name} ${prov}`).includes(q) && q.split(' ').length > 1)
+  })
+  if (!hit) return null
+  // Province-only entries (the DOE lists e.g. "Quezon" as a whole province) sit at the province centre, so they
+  // are not a real "nearby place" and would sit confusingly beside e.g. Quezon City.
+  const near = nearestAreas(data, hit[2], 8).filter((n) => n.km <= 40 && !(n.place.area.province === '' && PROV_N.has(norm(n.place.area.name)))).slice(0, 3)
+  return near.length ? { town: hit[0], province: hit[1], near } : null
 }
