@@ -22,6 +22,7 @@ const oneOf = <T extends string>(x: unknown, list: readonly T[], d: T): T => (ty
 const TRANSMISSIONS = ['manual', 'automatic', 'cvt', 'dct'] as const
 const CODING = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Exempt'] as const
 const FUELS = ['Diesel', 'Gasoline', 'Hybrid', 'EV'] as const
+const BIKE_TYPES = ['scooter', 'small', 'mid', 'big'] as const
 
 /** Keep the first record for each id; records with a missing id are dropped. */
 function uniqueById<T extends { id: string }>(list: T[]): T[] {
@@ -53,6 +54,8 @@ export function migrate(raw: unknown, now = new Date(), today = now.toISOString(
       preferredFuel: isObj(v.preferredFuel) && typeof v.preferredFuel.brand === 'string' && v.preferredFuel.brand && isProduct(v.preferredFuel.product)
         ? { brand: v.preferredFuel.brand, product: v.preferredFuel.product } : undefined,
       registeredFor: isISODate(v.registeredFor) ? v.registeredFor : undefined,
+      // Only motorcycles have a bike type; anything unrecognised is left unset and the engine size decides instead.
+      bikeType: v.type === 'motorcycle' && typeof v.bikeType === 'string' && (BIKE_TYPES as readonly string[]).includes(v.bikeType) ? (v.bikeType as (typeof BIKE_TYPES)[number]) : undefined,
       transmission: typeof v.transmission === 'string' && (TRANSMISSIONS as readonly string[]).includes(v.transmission) ? (v.transmission as (typeof TRANSMISSIONS)[number]) : undefined,
       // Engine size: a believable number of cc only (a typo like 1e9 must not pick a class by accident).
       engineCc: opt(v.engineCc) && (opt(v.engineCc) as number) >= 20 && (opt(v.engineCc) as number) <= 3000 ? Math.round(opt(v.engineCc) as number) : undefined,

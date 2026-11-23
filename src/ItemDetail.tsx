@@ -18,7 +18,7 @@ export function ItemDetailModal({ itemId, close, openModal }: { itemId: string; 
   const h = maintHealth(m, vehicle)
   const guide = m.guideKey && m.guideKey in GUIDE ? GUIDE[m.guideKey as GuideKey] : null
   const interval = [m.intervalKm && `${num(m.intervalKm)} km`, m.intervalMonths && `${m.intervalMonths} months`].filter(Boolean).join(' or ')
-  const source = m.source === 'booklet' ? 'From your service booklet' : m.source === 'general' ? 'General guidance, not from your car’s manual' : 'Set by you'
+  const source = m.source === 'booklet' ? 'From your service booklet' : m.source === 'general' ? `General guidance, not from your ${vehicle.type === 'car' ? 'car' : 'motorcycle'}’s manual` : 'Set by you'
   const over = (n?: number) => n !== undefined && n < 0
 
   return (

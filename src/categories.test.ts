@@ -86,3 +86,67 @@ describe('vehicle icons', () => {
     }
   })
 })
+
+describe('bike type decides a motorcycle schedule', () => {
+  const moto = (bikeType: 'scooter' | 'small' | 'mid' | 'big' | undefined, o: Partial<Vehicle> = {}) =>
+    ({ type: 'motorcycle' as const, fuelType: 'Gasoline' as const, bikeType, ...o })
+
+  it('each bike type maps to its own class, whatever the engine size or gearbox says', async () => {
+    const { classOf } = await import('./intervals')
+    expect(classOf(moto('scooter'))).toBe('moto-scooter-125')
+    expect(classOf(moto('small'))).toBe('moto-125')
+    expect(classOf(moto('small', { engineCc: 150 }))).toBe('moto-150')
+    expect(classOf(moto('mid'))).toBe('moto-250-400')
+    expect(classOf(moto('big'))).toBe('moto-big')
+    // the owner's answer wins over a contradictory gearbox or cc
+    expect(classOf(moto('big', { transmission: 'cvt', engineCc: 125 }))).toBe('moto-big')
+    expect(classOf(moto('scooter', { transmission: 'manual' }))).toBe('moto-scooter-125')
+  })
+
+  it('a motorcycle saved before this question existed still gets a class from its engine size', async () => {
+    const { classOf } = await import('./intervals')
+    expect(classOf(moto(undefined, { engineCc: 650 }))).toBe('moto-big')
+    expect(classOf(moto(undefined))).toBe('moto-125')
+  })
+
+  it('schedules differ by type: scooters get CVT items, geared bikes a chain, only mid and big get an oil filter and valve check', () => {
+    const keys = (t: 'scooter' | 'small' | 'mid' | 'big') => planFor(moto(t)).map((i) => i.key)
+    expect(keys('scooter')).toEqual(expect.arrayContaining(['cvt-belt', 'cvt-rollers', 'gear-oil']))
+    expect(keys('scooter')).not.toContain('chain')
+    for (const t of ['small', 'mid', 'big'] as const) { expect(keys(t)).toContain('chain'); expect(keys(t)).not.toContain('cvt-belt') }
+    expect(keys('small')).not.toContain('oil-filter')
+    expect(keys('mid')).toContain('oil-filter')
+    expect(keys('big')).toEqual(expect.arrayContaining(['oil-filter', 'valve-clearance', 'coolant']))
+  })
+
+  it('bigger bikes get longer oil intervals than small ones', () => {
+    const oil = (t: 'small' | 'mid' | 'big') => planFor(moto(t)).find((i) => i.key === 'engine-oil')!.intervalKm!
+    expect(oil('small')).toBeLessThan(oil('mid'))
+    expect(oil('mid')).toBeLessThan(oil('big'))
+  })
+
+  it('a motorcycle never gets a car-only note in its schedule, including the severe-use reason', () => {
+    for (const t of ['scooter', 'small', 'mid', 'big'] as const) {
+      const plan = planFor(moto(t, { driving: { heavyTraffic: true, shortTrips: true, dusty: true, towing: true } }))
+      const text = plan.map((p) => `${p.name} ${p.why} ${p.adjusted ?? ''}`).join(' ')
+      expect(text, t).not.toMatch(/towing|your car|inside the car|\bcar\b/i)
+    }
+  })
+})
+
+describe('driving questions are worded for the vehicle', () => {
+  it('a motorcycle is asked about a passenger or cargo, a car about towing and heavy loads', async () => {
+    const { conditionsFor } = await import('./SetupMaintenance')
+    expect(conditionsFor('motorcycle').find((c) => c.key === 'towing')!.label).toMatch(/passenger|cargo/i)
+    expect(conditionsFor('motorcycle').map((c) => c.label + c.hint).join(' ')).not.toMatch(/towing/i)
+    expect(conditionsFor('car').find((c) => c.key === 'towing')!.label).toMatch(/heavy loads/i)
+  })
+})
+
+describe('car screens mention no motorcycles', () => {
+  it('the car gearbox options never refer to scooters', () => {
+    const src = fs.readFileSync('src/SetupMaintenance.tsx', 'utf8')
+    const block = src.slice(src.indexOf('const TRANSMISSIONS'), src.indexOf('/** What kind of motorcycle'))
+    expect(block).not.toMatch(/scooter/i)
+  })
+})

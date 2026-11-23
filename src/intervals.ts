@@ -6,7 +6,7 @@
 // guidance" in the UI, and the owner can replace any interval with the number from her own casa booklet.
 //
 // All the numbers live in the tables in this file so a mechanic or the owner can review and correct them in one place.
-import type { DrivingConditions, FuelType, Transmission, Vehicle } from './types'
+import type { BikeType, DrivingConditions, FuelType, Transmission, Vehicle } from './types'
 
 export type GuideKey =
   | 'engine-oil' | 'oil-filter' | 'air-filter' | 'cabin-filter' | 'ac-clean' | 'fuel-filter' | 'spark-plugs'
@@ -81,7 +81,7 @@ export const GUIDE: Record<GuideKey, GuideEntry> = {
   'trans-auto': G({ key: 'trans-auto', name: 'Automatic transmission fluid', km: 40000, months: 36, severe: ['towing', 'heavyTraffic'],
     why: 'Cools and lubricates the automatic gearbox. Many people never change it, then the gearbox fails, which is a very costly repair. Fresh fluid is cheap insurance.' }),
   'trans-cvt': G({ key: 'trans-cvt', name: 'CVT transmission fluid', km: 40000, months: 36, severe: ['towing', 'heavyTraffic'],
-    why: 'A CVT needs its own special fluid. Wrong or old fluid damages the belt. Use the type your car needs and change it on time.' }),
+    why: 'A CVT needs its own special fluid. Wrong or old fluid damages the belt. Use the type your vehicle needs and change it on time.' }),
   'trans-dct': G({ key: 'trans-dct', name: 'Dual-clutch transmission fluid', km: 40000, months: 36, severe: ['towing', 'heavyTraffic'],
     why: 'Dual-clutch gearboxes are sensitive to old fluid. Have it done by someone who knows your gearbox.' }),
   'diff-4x4': G({ key: 'diff-4x4', name: 'Differential / transfer case oil', km: 40000, months: 36, severe: ['towing', 'dusty'],
@@ -119,8 +119,22 @@ export function motoClass(engineCc: number | undefined, scooter: boolean): Vehic
   return 'moto-big'
 }
 
-export function classOf(v: Pick<Vehicle, 'type' | 'fuelType' | 'engineCc' | 'transmission'>): VehicleClass {
-  if (v.type === 'motorcycle') return motoClass(v.engineCc, v.transmission === 'cvt' || v.transmission === 'automatic')
+/** The maintenance class a chosen bike type maps to. Small bikes split by size: about 125cc and under vs 150-160cc. */
+export function classForBikeType(t: BikeType, engineCc?: number): VehicleClass {
+  if (t === 'scooter') return engineCc && engineCc > 160 ? 'moto-250-400' : 'moto-scooter-125'
+  if (t === 'mid') return 'moto-250-400'
+  if (t === 'big') return 'moto-big'
+  return engineCc && engineCc > 125 ? 'moto-150' : 'moto-125'
+}
+
+/**
+ * A motorcycle's class comes from the type the owner chose. Vehicles saved before that question existed have no type,
+ * so they fall back to engine size and gearbox as before.
+ */
+export function classOf(v: Pick<Vehicle, 'type' | 'fuelType' | 'engineCc' | 'transmission'> & Partial<Pick<Vehicle, 'bikeType'>>): VehicleClass {
+  if (v.type === 'motorcycle') {
+    return v.bikeType ? classForBikeType(v.bikeType, v.engineCc) : motoClass(v.engineCc, v.transmission === 'cvt' || v.transmission === 'automatic')
+  }
   const f: FuelType = v.fuelType
   return f === 'Diesel' ? 'car-diesel' : f === 'Hybrid' ? 'car-hybrid' : f === 'EV' ? 'car-ev' : 'car-gasoline'
 }
@@ -171,7 +185,7 @@ const roundMo = (n: number) => Math.max(1, Math.round(n))
  * The suggested maintenance plan for a vehicle: only items that exist for its class, with intervals shortened for
  * severe use and a plain reason for each. Never empty and never throws: unknown inputs fall back to a general plan.
  */
-export function planFor(v: Pick<Vehicle, 'type' | 'fuelType' | 'engineCc' | 'transmission' | 'driving'>): PlanItem[] {
+export function planFor(v: Pick<Vehicle, 'type' | 'fuelType' | 'engineCc' | 'transmission' | 'driving'> & Partial<Pick<Vehicle, 'bikeType'>>): PlanItem[] {
   const cls = classOf(v)
   const keys = [...ITEMS_BY_CLASS[cls]]
   // Cars with a gearbox: add the transmission item that matches it (EVs have none; the diesel/gasoline default is automatic).
@@ -190,7 +204,8 @@ export function planFor(v: Pick<Vehicle, 'type' | 'fuelType' | 'engineCc' | 'tra
       const factor = Math.max(SEVERE_FLOOR, Math.pow(SEVERE_FACTOR, hits.length))
       if (km !== undefined) km = roundKm(km * factor)
       if (months !== undefined) months = roundMo(months * factor)
-      adjusted = `Shortened because of ${hits.map((h) => CONDITION_LABEL[h]).join(' and ')}.`
+      const label = (h: keyof DrivingConditions) => (h === 'towing' && v.type === 'motorcycle' ? 'carrying a passenger or cargo' : CONDITION_LABEL[h])
+      adjusted = `Shortened because of ${hits.map(label).join(' and ')}.`
     }
     return { key, name: base.name, intervalKm: km, intervalMonths: months, why: base.why, adjusted, source: 'general' as const }
   })

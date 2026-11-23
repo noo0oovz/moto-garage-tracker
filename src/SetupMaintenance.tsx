@@ -4,22 +4,33 @@ import { Modal, Toggle, numVal, useOnce } from './ui'
 import { useStore } from './store'
 import { LAST_DONE_LABEL, keysCoveredBy, lastServiceFor, planFor, type LastDone, type PlanItem } from './intervals'
 import { todayISO } from './logic'
-import type { DrivingConditions, MaintItem, Transmission, Vehicle } from './types'
+import type { BikeType, DrivingConditions, MaintItem, Transmission, Vehicle } from './types'
 
 const ANSWERS: LastDone[] = ['just-done', 'recent', 'old', 'unknown']
 
 const TRANSMISSIONS: { value: Transmission; label: string; hint: string }[] = [
   { value: 'automatic', label: 'Automatic', hint: 'P-R-N-D shifter' },
   { value: 'manual', label: 'Manual', hint: 'Has a clutch pedal' },
-  { value: 'cvt', label: 'CVT', hint: 'Automatic with no gears (many scooters and small cars)' },
+  { value: 'cvt', label: 'CVT', hint: 'Automatic with no fixed gears (common in small cars and hybrids)' },
   { value: 'dct', label: 'Dual-clutch', hint: 'Sporty automatic (DCT / DSG)' },
 ]
 
-const CONDITIONS: { key: keyof DrivingConditions; label: string; hint: string }[] = [
+/** What kind of motorcycle. Decides which maintenance schedule is suggested, so the examples help owners find their own bike. */
+export const BIKE_TYPES: { value: BikeType; label: string; hint: string; examples: string }[] = [
+  { value: 'scooter', label: 'Scooter', hint: 'Twist-and-go, no clutch lever', examples: 'Mio, Click, Beat, NMAX, Aerox, PCX' },
+  { value: 'small', label: 'Small motorcycle', hint: 'Has gears, up to about 150cc', examples: 'XRM, Wave, TMX, Raider, Barako' },
+  { value: 'mid', label: 'Mid-size bike', hint: 'About 200 to 400cc', examples: 'Rouser 200, Ninja 400, Dominar 400, Rebel 300' },
+  { value: 'big', label: 'Big bike', hint: 'Over 400cc', examples: 'Ninja 650, Z900, Rebel 500, Africa Twin' },
+]
+
+/** The same four conditions, worded for the kind of vehicle: a pickup tows, a motorcycle carries a rider and cargo. */
+export const conditionsFor = (type: Vehicle['type']): { key: keyof DrivingConditions; label: string; hint: string }[] => [
   { key: 'heavyTraffic', label: 'Heavy traffic', hint: 'Stop-and-go in the city, like EDSA' },
   { key: 'shortTrips', label: 'Mostly short trips', hint: 'Under 10 km, so the engine rarely warms up fully' },
   { key: 'dusty', label: 'Dusty or flooded roads', hint: 'Construction, unpaved or flood-prone roads' },
-  { key: 'towing', label: 'Carrying heavy loads', hint: 'Towing, full cargo, or a passenger every day' },
+  type === 'motorcycle'
+    ? { key: 'towing', label: 'Carrying a passenger or cargo', hint: 'A backrider, delivery box or heavy bag most days' }
+    : { key: 'towing', label: 'Carrying heavy loads', hint: 'Towing, full cargo, or a full load of passengers every day' },
 ]
 
 const intervalText = (i: { intervalKm?: number; intervalMonths?: number }) =>
@@ -46,13 +57,17 @@ export function SetupMaintenanceModal({ vehicleId, close }: { vehicleId: string;
   const vehicle = state.vehicles.find((v) => v.id === vehicleId)
   const claim = useOnce()
   const [step, setStep] = useState<1 | 2>(1)
-  const [transmission, setTransmission] = useState<Transmission>(vehicle?.transmission ?? (vehicle?.type === 'motorcycle' ? 'cvt' : 'automatic'))
+  const [transmission, setTransmission] = useState<Transmission>(vehicle?.transmission ?? (vehicle?.type === 'motorcycle' ? (vehicle.bikeType === 'scooter' ? 'cvt' : 'manual') : 'automatic'))
   const [cc, setCc] = useState(vehicle?.engineCc ? String(vehicle.engineCc) : '')
+  // A saved vehicle from before this question existed starts on the type its engine size and gearbox imply.
+  const [bikeType, setBikeType] = useState<BikeType | undefined>(
+    vehicle?.type === 'motorcycle' ? vehicle.bikeType ?? (vehicle.engineCc || vehicle.transmission ? guessBikeType(vehicle.engineCc, vehicle.transmission) : undefined) : undefined,
+  )
   const [driving, setDriving] = useState<DrivingConditions>(vehicle?.driving ?? {})
 
   const facts = useMemo(
-    () => (vehicle ? { ...vehicle, transmission, engineCc: numVal(cc) > 0 ? numVal(cc) : undefined, driving } : null),
-    [vehicle, transmission, cc, driving],
+    () => (vehicle ? { ...vehicle, transmission, bikeType, engineCc: numVal(cc) > 0 ? numVal(cc) : undefined, driving } : null),
+    [vehicle, transmission, bikeType, cc, driving],
   )
   const plan = useMemo(() => (facts ? planFor(facts) : []), [facts])
   const [rows, setRows] = useState<Row[]>([])
@@ -63,7 +78,10 @@ export function SetupMaintenanceModal({ vehicleId, close }: { vehicleId: string;
 
   if (!vehicle || !facts) return null
 
+  // A motorcycle can only continue once it is known what kind it is: that answer decides the whole schedule.
+  const needsBikeType = vehicle.type === 'motorcycle' && !bikeType
   const goToItems = () => {
+    if (needsBikeType) return
     setRows(plan.filter((p) => !existingKeys.has(p.key)).map((item) => ({ item, on: true, answer: '', bookletKm: '', bookletMonths: '', open: false })))
     setStep(2)
   }
@@ -75,7 +93,7 @@ export function SetupMaintenanceModal({ vehicleId, close }: { vehicleId: string;
   const save = () => {
     if (!claim()) return
     // The facts belong to the vehicle, so they are kept for next time and for "update from vehicle details".
-    saveVehicle({ ...vehicle, transmission, engineCc: facts.engineCc, driving })
+    saveVehicle({ ...vehicle, transmission, bikeType, engineCc: facts.engineCc, driving })
     const items: Omit<MaintItem, 'id'>[] = chosen.map((r) => {
       const km = numVal(r.bookletKm) > 0 ? numVal(r.bookletKm) : r.item.intervalKm
       const mo = numVal(r.bookletMonths) > 0 ? numVal(r.bookletMonths) : r.item.intervalMonths
@@ -114,29 +132,34 @@ export function SetupMaintenanceModal({ vehicleId, close }: { vehicleId: string;
             </fieldset>
           ) : (
             <>
-              <label className="block">
-                <span className="label">Engine size (cc)</span>
-                <input type="number" inputMode="numeric" className="field" value={cc} onChange={(e) => setCc(e.target.value)} placeholder="e.g. 125, 155, 250, 650" />
-                <span className="mt-1 block text-xs text-slate-500">Look for it on the OR/CR, the side of the bike, or the model name (Click 160 is 160cc). Not sure? Leave it blank.</span>
-              </label>
               <fieldset>
-                <legend className="label">Is it a scooter (twist-and-go) or does it have gears?</legend>
-                <div className="grid grid-cols-2 gap-2">
-                  {([['cvt', 'Scooter', 'Twist-and-go, no clutch lever'], ['manual', 'Has gears', 'Clutch lever and foot shifter']] as const).map(([value, label, hint]) => (
-                    <button key={value} type="button" aria-pressed={transmission === value} onClick={() => setTransmission(value)}
-                      className={`min-h-14 rounded-xl border px-3 py-2 text-left text-sm transition ${transmission === value ? 'border-orange-500 bg-orange-500/10 font-semibold' : 'border-slate-300'}`}>
-                      <span className="block">{label}</span><span className="block text-xs font-normal text-slate-500">{hint}</span>
+                <legend className="label">What kind of motorcycle is it?</legend>
+                <div className="grid gap-2" role="radiogroup" aria-label="Kind of motorcycle">
+                  {BIKE_TYPES.map((b) => (
+                    <button key={b.value} type="button" role="radio" aria-checked={bikeType === b.value}
+                      onClick={() => { setBikeType(b.value); setTransmission(b.value === 'scooter' ? 'cvt' : 'manual') }}
+                      className={`min-h-14 rounded-xl border px-3 py-2 text-left text-sm transition ${bikeType === b.value ? 'border-orange-500 bg-orange-500/10 font-semibold' : 'border-slate-300'}`}>
+                      <span className="block">{b.label} <span className="font-normal text-slate-500">· {b.hint}</span></span>
+                      <span className="block text-xs font-normal text-slate-500">{b.examples}</span>
                     </button>
                   ))}
                 </div>
+                {needsBikeType && <p className="mt-1 text-xs text-slate-500" role="status">Pick the one that fits best so we suggest the right service items.</p>}
               </fieldset>
+              {bikeType && (
+                <label className="block">
+                  <span className="label">Engine size in cc (optional)</span>
+                  <input type="number" inputMode="numeric" className="field" value={cc} onChange={(e) => setCc(e.target.value)} placeholder={bikeType === 'scooter' ? 'e.g. 110, 125, 155' : bikeType === 'small' ? 'e.g. 110, 125, 150' : bikeType === 'mid' ? 'e.g. 200, 250, 400' : 'e.g. 650, 900, 1000'} />
+                  <span className="mt-1 block text-xs text-slate-500">Find it on the OR/CR or in the model name. It only fine-tunes the schedule, so leave it blank if you are not sure.</span>
+                </label>
+              )}
             </>
           )}
 
           <fieldset>
             <legend className="label">How do you use it? (Pick all that apply)</legend>
             <div className="space-y-2">
-              {CONDITIONS.map((c) => (
+              {conditionsFor(vehicle.type).map((c) => (
                 <div key={c.key}>
                   <Toggle checked={!!driving[c.key]} onChange={(on) => setDriving((d) => ({ ...d, [c.key]: on }))} label={c.label} />
                   <p className="mt-0.5 px-1 text-xs text-slate-500">{c.hint}</p>
@@ -145,13 +168,13 @@ export function SetupMaintenanceModal({ vehicleId, close }: { vehicleId: string;
             </div>
           </fieldset>
 
-          <button className="btn-primary w-full" onClick={goToItems}>Next</button>
+          <button className="btn-primary w-full" onClick={goToItems} disabled={needsBikeType}>Next</button>
         </div>
       ) : (
         <div className="space-y-4">
           <p className="flex items-start gap-2 rounded-xl bg-slate-100 p-3 text-xs text-slate-600">
             <Info size={16} className="mt-0.5 shrink-0" aria-hidden />
-            <span>These are <b>general guidance</b>, not from your car&rsquo;s own manual. If you have the casa service booklet or sticker, tap an item and type its numbers instead. Not sure when something was done? Pick &ldquo;I don&rsquo;t know&rdquo;. We will simply mark it as worth checking.</span>
+            <span>These are <b>general guidance</b>, not from your {vehicle.type === 'car' ? 'car' : 'motorcycle'}&rsquo;s own manual. If you have the casa service booklet or sticker, tap an item and type its numbers instead. Not sure when something was done? Pick &ldquo;I don&rsquo;t know&rdquo;. We will simply mark it as worth checking.</span>
           </p>
 
           {rows.length === 0 && <p className="text-sm text-slate-500">Everything suggested for this vehicle is already being tracked.</p>}
@@ -226,3 +249,10 @@ export function SetupMaintenanceModal({ vehicleId, close }: { vehicleId: string;
 
 /** Exposed for the vehicle form: an existing vehicle that has no tracked items yet should be offered setup. */
 export const needsSetup = (v: Pick<Vehicle, 'id'>, maint: Pick<MaintItem, 'vehicleId'>[]) => !maint.some((m) => m.vehicleId === v.id)
+
+/** For a motorcycle saved before the bike-type question existed: the closest type its engine size and gearbox imply. */
+export function guessBikeType(cc: number | undefined, transmission: Transmission | undefined): BikeType {
+  if (cc && cc > 400) return 'big'
+  if (cc && cc > 160) return 'mid'
+  return transmission === 'cvt' || transmission === 'automatic' ? 'scooter' : 'small'
+}

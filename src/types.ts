@@ -23,12 +23,16 @@ export interface Vehicle {
   registeredFor?: string
   /** Manual, automatic, CVT or dual-clutch: changes which transmission fluid and how often. Cars (and some bikes). */
   transmission?: Transmission
+  /** The kind of motorcycle (motorcycles only). Decides which maintenance schedule applies. */
+  bikeType?: BikeType
   /** Engine size in cc (motorcycles): picks the maintenance class, from small scooters up to big bikes. */
   engineCc?: number
   /** How the vehicle is driven. "Severe use" shortens several intervals. */
   driving?: DrivingConditions
 }
 
+/** What kind of motorcycle: picks its maintenance schedule. Scooter = twist-and-go; small = up to about 150cc with gears; mid = about 200-400cc; big = over 400cc. */
+export type BikeType = 'scooter' | 'small' | 'mid' | 'big'
 export type Transmission = 'manual' | 'automatic' | 'cvt' | 'dct'
 export interface DrivingConditions {
   heavyTraffic?: boolean
