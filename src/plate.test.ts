@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { codingDayFor, codingIsAuto, lastDigit, nextRenewal, secondLastDigit } from './plate'
+import { codingDayFor, codingIsAuto, lastDigit, nextRenewal, reminderLevel, secondLastDigit } from './plate'
 
 describe('plate digits', () => {
   it('reads the last digit regardless of letters, spaces and dashes', () => {
@@ -95,5 +95,61 @@ describe('seed data agrees with the plate rules', () => {
   it('both demo vehicles have a coding day that matches their plate', async () => {
     const { buildDemoState } = await import('./data')
     for (const v of buildDemoState('2026-06-01').vehicles) expect(codingIsAuto(v), `${v.nickname}: ${v.plate} / ${v.codingDay}`).toBe(true)
+  })
+})
+
+describe('marking a vehicle as registered', () => {
+  // plate ending 4 -> deadline 2026-04-30 in 2026
+  const at = (today: string, registeredFor?: string) => nextRenewal('X 4', 'car', today, registeredFor)!
+  it('is registered only when the stored deadline equals the current one', () => {
+    expect(at('2026-04-10', '2026-04-30').registered).toBe(true)
+    expect(at('2026-04-10', '2026-04-29').registered).toBe(false)
+    expect(at('2026-04-10', undefined).registered).toBe(false)
+    expect(at('2026-04-10', '').registered).toBe(false)
+  })
+  it('a tick for last year does not silence this year (the tick expires by itself)', () => {
+    expect(at('2026-04-10', '2025-04-30').registered).toBe(false)
+    expect(reminderLevel(at('2026-04-10', '2025-04-30'))).toBe('soon')
+  })
+  it('after the registered deadline passes, the next cycle is not registered', () => {
+    // 2026-04-30 was marked; by September the current deadline is 2027-04-30, so the mark no longer matches
+    const r = at('2026-09-15', '2026-04-30')
+    expect(r.deadline).toBe('2027-04-30')
+    expect(r.registered).toBe(false)
+    expect(reminderLevel(r)).toBe('info')
+  })
+  it('marking while a missed deadline is still current (within 30 days) clears the overdue warning', () => {
+    const missed = at('2026-05-10') // 10 days overdue, still the current deadline
+    expect(missed).toMatchObject({ deadline: '2026-04-30', status: 'overdue' })
+    const done = at('2026-05-10', missed.deadline)
+    expect(done.registered).toBe(true)
+    expect(reminderLevel(done)).toBe('none')
+  })
+  it('keeps the dates when registered, so the UI can still say which cycle was paid', () => {
+    const r = at('2026-04-10', '2026-04-30')
+    expect(r).toMatchObject({ deadline: '2026-04-30', daysLeft: 20, month: 4 })
+  })
+  it('changing the plate digit changes the month, so an old mark stops matching', () => {
+    const old = nextRenewal('X 4', 'car', '2026-04-10')!.deadline // 2026-04-30
+    expect(nextRenewal('X 5', 'car', '2026-04-10', old)!.registered).toBe(false) // May deadline
+  })
+  it('a motorcycle plate behaves exactly like a car plate', () => {
+    for (const plate of ['123 ABC', '1234 AB', 'ABC 1235']) {
+      expect(nextRenewal(plate, 'motorcycle', '2026-11-23'), plate).toEqual(nextRenewal(plate, 'car', '2026-11-23'))
+    }
+  })
+})
+
+describe('reminderLevel', () => {
+  const lvl = (today: string, reg?: string) => reminderLevel(nextRenewal('X 4', 'car', today, reg)!) // deadline 2026-04-30
+  it('maps distance to a level', () => {
+    expect(lvl('2026-01-01')).toBe('info') // far off: shown quietly, not hidden
+    expect(lvl('2026-04-10')).toBe('soon') // 20 days
+    expect(lvl('2026-04-25')).toBe('due') // 5 days
+    expect(lvl('2026-04-30')).toBe('due') // the last day
+    expect(lvl('2026-05-02')).toBe('overdue')
+  })
+  it('registered is always silent, at every distance', () => {
+    for (const today of ['2026-01-01', '2026-04-10', '2026-04-25', '2026-05-10']) expect(lvl(today, '2026-04-30'), today).toBe('none')
   })
 })

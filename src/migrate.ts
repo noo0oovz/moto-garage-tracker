@@ -47,6 +47,7 @@ export function migrate(raw: unknown, now = new Date(), today = now.toISOString(
       codingDay: oneOf(v.codingDay, CODING, 'Exempt'), fuelType: oneOf(v.fuelType, FUELS, 'Gasoline'),
       preferredFuel: isObj(v.preferredFuel) && typeof v.preferredFuel.brand === 'string' && v.preferredFuel.brand && isProduct(v.preferredFuel.product)
         ? { brand: v.preferredFuel.brand, product: v.preferredFuel.product } : undefined,
+      registeredFor: isISODate(v.registeredFor) ? v.registeredFor : undefined,
     })),
   )
   const ids = new Set(vehicles.map((v) => v.id))

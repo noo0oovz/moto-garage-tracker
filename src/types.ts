@@ -16,6 +16,11 @@ export interface Vehicle {
   fuelType: FuelType
   /** The brand and grade this vehicle usually buys, so Fuel Watch can headline that price. Optional. */
   preferredFuel?: { brand: string; product: string }
+  /**
+   * The registration deadline (YYYY-MM-DD) of the renewal the user marked as done. Storing the deadline, not a
+   * boolean, is what makes the tick expire by itself: next year's deadline is a different date, so it stops matching.
+   */
+  registeredFor?: string
 }
 
 export interface MaintItem {

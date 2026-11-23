@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import {
-  AlarmClockCheck, CalendarClock, Check, ChevronRight, Download, Fuel, Gauge, Pencil, Plus, RotateCcw, Trash2,
+  AlarmClockCheck, CalendarClock, Check, CheckCircle2, ChevronRight, Download, Fuel, Gauge, Pencil, Plus, RotateCcw, Trash2,
   Upload, Wallet, Wrench, FileSpreadsheet, Cog, MapPin, ShieldAlert, ShieldCheck, ShieldQuestion, Car, Bike, TrendingUp,
 } from 'lucide-react'
 import { useStore } from './store'
@@ -12,7 +12,7 @@ import {
 } from './logic'
 import { CHECKLIST_CAR, CHECKLIST_MOTO } from './data'
 import { useMinWidth } from './useLayout'
-import { MONTH_NAMES, nextRenewal } from './plate'
+import { MONTH_NAMES, nextRenewal, reminderLevel } from './plate'
 
 type Open = (m: ModalState) => void
 
@@ -53,20 +53,55 @@ function Kpi({ icon: Icon, label, value, sub }: { icon: typeof Gauge; label: str
   )
 }
 
-/** Estimated registration deadline from the plate. Hidden when the plate has no digit or the deadline is far off. */
-export function RegistrationBanner({ v }: { v: Vehicle }) {
-  const r = nextRenewal(v.plate, v.type, todayISO())
-  if (!r || r.status === 'ok') return null
-  const tone = r.status === 'overdue' ? 'border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-300' : 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+/**
+ * Estimated registration status from the plate. It always shows something: a far-off deadline is a quiet line (not
+ * nothing, which looks like a missing feature), a near or missed one is an amber/red banner, and a deadline the user
+ * marked as done turns into a calm "Registered" line until the next renewal comes round.
+ */
+export function RegistrationBanner({ v, open }: { v: Vehicle; open: Open }) {
+  const { saveVehicle } = useStore()
+  const r = nextRenewal(v.plate, v.type, todayISO(), v.registeredFor)
+  if (!r) {
+    return (
+      <button onClick={() => open({ kind: 'vehicle', item: v })} className="flex min-h-11 w-full items-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 text-left text-xs text-slate-500 hover:bg-slate-100 dark:border-white/15 dark:text-slate-400 dark:hover:bg-white/5">
+        <CalendarClock size={16} className="shrink-0" /> Add a plate number to see this vehicle&rsquo;s registration month.
+      </button>
+    )
+  }
+  const level = reminderLevel(r)
+  const monthYear = `${MONTH_NAMES[r.month - 1]} ${r.deadline.slice(0, 4)}`
+  const mark = () => saveVehicle({ ...v, registeredFor: r.deadline })
+  const undo = () => saveVehicle({ ...v, registeredFor: undefined })
+
+  if (level === 'none') {
+    return (
+      <div role="status" className="flex min-h-11 items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-700 dark:text-emerald-300">
+        <CheckCircle2 size={16} className="shrink-0" />
+        <span className="min-w-0 flex-1">Registered for {monthYear}. Next renewal reminder comes back after that.</span>
+        <button className="min-h-11 shrink-0 px-2 font-semibold underline" onClick={undo}>Undo</button>
+      </div>
+    )
+  }
+  if (level === 'info') {
+    return (
+      <div role="status" className="flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 px-3 py-1.5 text-xs text-slate-600 dark:border-white/10 dark:text-slate-300">
+        <CalendarClock size={16} className="shrink-0" />
+        <span className="min-w-0 flex-1">Registration due by the end of <b>{monthYear}</b> (in {r.daysLeft} days). Estimated from plate {v.plate}.</span>
+        <button className="min-h-11 shrink-0 px-2 font-semibold text-orange-500 underline" onClick={mark}>Already registered</button>
+      </div>
+    )
+  }
+  const tone = level === 'overdue' ? 'border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-300' : 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'
   return (
-    <div role="status" className={`flex items-start gap-3 rounded-2xl border p-3 ${tone}`}>
-      <CalendarClock size={22} className="mt-0.5 shrink-0" />
-      <div className="min-w-0">
+    <div role="status" className={`flex flex-wrap items-center gap-3 rounded-2xl border p-3 ${tone}`}>
+      <CalendarClock size={22} className="shrink-0" />
+      <div className="min-w-0 flex-1">
         <p className="text-sm font-bold">
-          {r.status === 'overdue' ? `Registration was due ${MONTH_NAMES[r.month - 1]}` : r.daysLeft === 0 ? 'Registration is due today' : `Registration due in ${r.daysLeft} day${r.daysLeft === 1 ? '' : 's'}`}
+          {level === 'overdue' ? `Registration was due ${MONTH_NAMES[r.month - 1]}` : r.daysLeft === 0 ? 'Registration is due today' : `Registration due in ${r.daysLeft} day${r.daysLeft === 1 ? '' : 's'}`}
         </p>
         <p className="text-xs opacity-80">Estimated from plate {v.plate}: renew by the end of {MONTH_NAMES[r.month - 1]}. Confirm exact dates with LTO.</p>
       </div>
+      <button className="btn-ghost shrink-0 !border-current !text-current" onClick={mark}><Check size={16} /> Mark as registered</button>
     </div>
   )
 }
@@ -90,7 +125,7 @@ export function GaragePage({ open, go }: { open: Open; go: (p: Page) => void }) 
   return (
     <div className="page space-y-5">
       <CodingBanner v={vehicle} />
-      <RegistrationBanner v={vehicle} />
+      <RegistrationBanner v={vehicle} open={open} />
       <button onClick={() => go('fuelwatch')} className="card flex min-h-14 w-full items-center gap-3 p-3 text-left transition hover:border-orange-500/50">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-orange-500/15 text-orange-500"><MapPin size={20} /></span>
         <span className="min-w-0 flex-1">

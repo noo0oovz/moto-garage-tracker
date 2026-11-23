@@ -50,6 +50,8 @@ export interface RenewalInfo {
   deadline: string
   daysLeft: number
   status: 'ok' | 'soon' | 'due' | 'overdue'
+  /** True when the user marked this exact deadline as already registered. */
+  registered: boolean
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -59,7 +61,7 @@ const pad = (n: number) => String(n).padStart(2, '0')
  * plate's last digit. (LTO also assigns working-day windows within that month by the second-to-last digit; those
  * are intentionally not guessed - the month's last day is the outer limit.)
  */
-export function nextRenewal(plate: string, type: VehicleType, today: string): RenewalInfo | null {
+export function nextRenewal(plate: string, type: VehicleType, today: string, registeredFor?: string): RenewalInfo | null {
   const d = lastDigit(plate)
   if (d === null || !/^\d{4}-\d{2}-\d{2}$/.test(today)) return null
   void type // same month rule for cars and motorcycles; kept so a per-type rule is a local change
@@ -77,7 +79,17 @@ export function nextRenewal(plate: string, type: VehicleType, today: string): Re
   }
   const daysLeft = Math.round((new Date(Number(deadline.slice(0, 4)), Number(deadline.slice(5, 7)) - 1, Number(deadline.slice(8))).getTime() - new Date(y, m - 1, day).getTime()) / 86400000)
   const status = daysLeft < 0 ? 'overdue' : daysLeft <= 7 ? 'due' : daysLeft <= 30 ? 'soon' : 'ok'
-  return { month, deadline, daysLeft, status }
+  return { month, deadline, daysLeft, status, registered: !!registeredFor && registeredFor === deadline }
+}
+
+/**
+ * How loudly to remind. A deadline the user marked as done is silent; one more than 30 days away is just information
+ * (shown quietly, so a far-off deadline is still visible instead of looking like a missing feature).
+ */
+export type ReminderLevel = 'none' | 'info' | 'soon' | 'due' | 'overdue'
+export function reminderLevel(r: Pick<RenewalInfo, 'status' | 'registered'>): ReminderLevel {
+  if (r.registered) return 'none'
+  return r.status === 'ok' ? 'info' : r.status
 }
 
 export const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']

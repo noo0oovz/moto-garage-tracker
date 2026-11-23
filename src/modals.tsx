@@ -306,7 +306,11 @@ function VehicleModal({ item, close }: { item?: Vehicle; close: () => void }) {
   const claim = useOnce()
   const autoCoding = codingDayFor(type, plate)
   const shownCoding = codingManual ? coding : autoCoding
-  const renewal = nextRenewal(plate, type, todayISO())
+  // "Already registered" is stored as the deadline that was paid. It is a switch on the CURRENT deadline: a different
+  // plate digit means a different month, so a mark made for the old deadline no longer applies.
+  const [registeredFor, setRegisteredFor] = useState(item?.registeredFor ?? '')
+  const renewal = nextRenewal(plate, type, todayISO(), registeredFor)
+  const markStale = !!registeredFor && !!renewal && !renewal.registered
   return (
     <Modal title={item ? 'Edit Vehicle' : 'Add Vehicle'} onClose={close}>
       <form
@@ -318,6 +322,8 @@ function VehicleModal({ item, close }: { item?: Vehicle; close: () => void }) {
             id: item?.id, type, nickname: nickname.trim() || `${make} ${model}`.trim() || 'My Vehicle', make, model,
             year: numVal(year), plate, odometer: numVal(odo), avgDailyKm: numVal(daily), codingDay: shownCoding, fuelType: fuel,
             preferredFuel: prefBrand && isProduct(prefProduct) && grades.includes(prefProduct) ? { brand: prefBrand, product: prefProduct } : undefined,
+            // Keep only a mark that still matches this plate's current deadline.
+            registeredFor: renewal?.registered ? registeredFor : undefined,
           })
           close()
         }}
@@ -383,6 +389,20 @@ function VehicleModal({ item, close }: { item?: Vehicle; close: () => void }) {
               : <>Estimated registration deadline: <b>{MONTH_NAMES[renewal.month - 1]} {renewal.deadline.slice(0, 4)}</b> (by {renewal.deadline.slice(5, 7)}/{renewal.deadline.slice(8)}).</>}
             {' '}Based on the plate&rsquo;s last digit; confirm your exact dates with LTO.
           </p>
+        )}
+        {renewal && (
+          <div className="col-span-2 space-y-1">
+            <Toggle
+              checked={renewal.registered}
+              onChange={(on) => setRegisteredFor(on ? renewal.deadline : '')}
+              label={`Already registered for ${MONTH_NAMES[renewal.month - 1]} ${renewal.deadline.slice(0, 4)}`}
+            />
+            <p className="text-xs text-slate-500" aria-live="polite">
+              {renewal.registered ? 'The registration reminder is hidden until the next renewal comes round.'
+                : markStale ? 'Your plate changed, so the earlier "registered" mark no longer applies to this renewal.'
+                : 'Switch on once you have renewed, and the reminder stays quiet until next year.'}
+            </p>
+          </div>
         )}
         {!item && <p className="col-span-2 text-xs text-slate-500">A tailored {type === 'car' ? 'car/pickup' : 'motorcycle'} maintenance schedule will be added automatically.</p>}
         <button className="btn-primary col-span-2" type="submit">{item ? 'Save changes' : 'Add vehicle'}</button>

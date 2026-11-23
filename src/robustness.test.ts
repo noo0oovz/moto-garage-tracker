@@ -338,3 +338,19 @@ describe('preferred fuel survives import and is validated', () => {
     }
   })
 })
+
+describe('registeredFor survives import and is validated', () => {
+  const base = () => JSON.parse(JSON.stringify(buildDemoState('2026-06-01')))
+  it('is kept when it is a real date', () => {
+    const s = base(); s.vehicles[0].registeredFor = '2027-05-31'
+    expect(migrate(s)!.vehicles[0].registeredFor).toBe('2027-05-31')
+  })
+  it('is dropped when malformed, without rejecting the backup', () => {
+    for (const bad of ['garbage', '2027-02-30', '2027-5-31', 5, null, {}, [], true, '']) {
+      const s = base(); s.vehicles[0].registeredFor = bad
+      const r = migrate(s)
+      expect(r, JSON.stringify(bad)).not.toBeNull()
+      expect(r!.vehicles[0].registeredFor, JSON.stringify(bad)).toBeUndefined()
+    }
+  })
+})
