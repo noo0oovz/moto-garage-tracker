@@ -457,6 +457,11 @@ export function VehiclesPage({ open }: { open: Open }) {
         <h2 className="text-lg font-bold">Vehicles</h2>
         <button className="btn-primary" onClick={() => open({ kind: 'vehicle' })}><Plus size={16} /> Add vehicle</button>
       </div>
+      {state.vehicles.length === 0 && (
+        <Empty>
+          You have not added a vehicle yet. Add your car or motorcycle and it will show here.
+        </Empty>
+      )}
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {state.vehicles.map((v) => {
           const active = v.id === state.activeVehicleId
@@ -540,8 +545,8 @@ export function SettingsPage() {
           onClick={() => { download(`motogarage-backup-${stamp}.json`, JSON.stringify({ ...state, lastBackupAt: new Date().toISOString() }, null, 2), 'application/json'); markBackedUp() }} />
         <Row icon={Upload} title="Import JSON Backup" sub="Replaces current data" onClick={() => fileRef.current?.click()} />
         <Row icon={FileSpreadsheet} title="Export Logs to CSV" sub="Fuel & expenses for spreadsheets" onClick={exportCsv} />
-        <Row icon={RotateCcw} danger title="Reset Demo Data" sub="Erase everything and restore the sample garage"
-          onClick={() => { if (confirm('Reset all data to the demo garage? This cannot be undone.')) { resetDemo(); setMsg('Demo data restored.') } }} />
+        <Row icon={RotateCcw} danger title="Load sample garage" sub="Replace everything with example vehicles, to look around"
+          onClick={() => { if (confirm('Replace ALL your data with the sample garage? Your own vehicles and logs will be erased. This cannot be undone.')) { resetDemo(); setMsg('Sample garage loaded.') } }} />
         <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={(e) => onFile(e.target.files?.[0])} />
         {msg && <p role="status" className="px-3 pb-3 text-sm text-orange-500">{msg}</p>}
       </section>

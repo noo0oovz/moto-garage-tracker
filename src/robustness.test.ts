@@ -5,7 +5,7 @@ import {
   itemPoints, maintHealth, num, overallHealth, parseISO, peso, spendSummary, syncLinkedExpense, todayISO,
 } from './logic'
 import { migrate } from './migrate'
-import { buildDemoState } from './data'
+import { buildDemoState, buildEmptyState } from './data'
 import {
   estimateAt, nearestAreas, parseFuelData, projectPrice, searchAreas, typicalCurrent, typicalPrice, nearbyFallback, freshness, haversineKm,
   type FwData,
@@ -536,5 +536,52 @@ describe('overallHealth does not overreact when little is known', () => {
   })
   it('a vehicle with every item known and several overdue is still poor', () => {
     expect(overallHealth([od('a'), od('b'), od('c')]).level).toBe('poor')
+  })
+})
+
+describe('first-time users start with an empty garage', () => {
+  it('the empty state has no vehicles and nothing sample-like anywhere', () => {
+    const e = buildEmptyState()
+    for (const k of ['vehicles', 'maint', 'fuel', 'expenses', 'services', 'parts'] as const) expect(e[k], k).toEqual([])
+    expect(e.activeVehicleId).toBe('')
+    expect(e.checklist).toEqual({})
+  })
+  it('it is a valid state that survives import and export unchanged', () => {
+    const e = JSON.parse(JSON.stringify(buildEmptyState()))
+    const r = migrate(e)
+    expect(r).not.toBeNull()
+    expect(r!.vehicles).toEqual([]); expect(r!.activeVehicleId).toBe('')
+    expect(migrate(JSON.parse(JSON.stringify(r)))!.vehicles).toEqual([])
+  })
+  it('an empty garage does not trigger a backup nag before there is anything to back up', () => {
+    // installedAt is "now", so the 7-day "never backed up" reminder cannot fire on day one
+    expect(backupStatus({ installedAt: buildEmptyState().installedAt }).due).toBe(false)
+  })
+  it('the sample garage is still available on demand, and is not what a new user gets', () => {
+    expect(buildDemoState('2026-06-01').vehicles.length).toBe(2)
+    expect(buildEmptyState().vehicles.length).toBe(0)
+  })
+  it('saved data from an existing user (including the sample vehicles) loads exactly as it was', () => {
+    const canon = (o: unknown): unknown => Array.isArray(o) ? o.map(canon) : o && typeof o === 'object' ? Object.fromEntries(Object.keys(o).sort().map((k) => [k, canon((o as Record<string, unknown>)[k])])) : o
+    const saved = JSON.parse(JSON.stringify(buildDemoState('2026-06-01')))
+    const r = migrate(saved)!
+    for (const k of ['vehicles', 'maint', 'fuel', 'expenses', 'services', 'parts'] as const) expect(canon(r[k]), k).toEqual(canon(saved[k]))
+    expect(r.activeVehicleId).toBe(saved.activeVehicleId)
+  })
+  it('a state with no vehicles still repairs a dangling active id and survives hostile records', () => {
+    const e = JSON.parse(JSON.stringify(buildEmptyState()))
+    e.activeVehicleId = 'ghost'; e.fuel = [{ id: 'f', vehicleId: 'ghost', liters: 5 }]
+    const r = migrate(e)!
+    expect(r.activeVehicleId).toBe(''); expect(r.fuel).toEqual([])
+  })
+})
+
+describe('backup reminder only matters once there is data', () => {
+  it('the reminder rule fires on time alone, so the app must also require a vehicle (checked in the shell)', () => {
+    // 10 days after install with nothing ever backed up: the time rule says "due"...
+    const old = new Date(Date.now() - 10 * 86400000).toISOString()
+    expect(backupStatus({ installedAt: old }).due).toBe(true)
+    // ...which is exactly why an empty garage must not show it: there is nothing to back up.
+    expect(buildEmptyState().vehicles.length).toBe(0)
   })
 })

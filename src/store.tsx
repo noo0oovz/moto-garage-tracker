@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { AppState, Expense, FuelLog, MaintItem, PartRecord, ServiceRecord, Vehicle } from './types'
-import { STORAGE_KEY, buildDemoState } from './data'
+import { STORAGE_KEY, buildDemoState, buildEmptyState } from './data'
 import { latestService, syncLinkedExpense, todayISO, uid } from './logic'
 import { migrate } from './migrate'
 
@@ -11,8 +11,9 @@ function load(): AppState {
       const s = migrate(JSON.parse(txt))
       if (s) return s
     }
-  } catch { /* fall through to demo */ }
-  return buildDemoState(todayISO())
+  } catch { /* unreadable saved data: start fresh rather than crash */ }
+  // Nothing saved yet (a first-time user): start with an empty garage so only their own vehicles ever appear.
+  return buildEmptyState()
 }
 
 export interface ServicePayload {

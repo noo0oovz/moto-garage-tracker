@@ -65,6 +65,17 @@ export const CHECKLIST_MOTO = [
   { key: 'rider', label: 'Rider Check', hint: 'Helmet strap, gloves, jacket, boots' },
 ]
 
+/**
+ * What a first-time user starts with: nothing. No sample vehicles, so the dashboard only ever shows the user's own.
+ * (The sample garage still exists as an explicit "Load sample garage" action, never added automatically.)
+ */
+export function buildEmptyState(): AppState {
+  return {
+    version: SCHEMA_VERSION, vehicles: [], maint: [], fuel: [], expenses: [], services: [], parts: [],
+    checklist: {}, activeVehicleId: '', theme: 'dark', installedAt: new Date().toISOString(),
+  }
+}
+
 export function buildDemoState(today: string): AppState {
   const hilux: Vehicle = {
     id: uid(), type: 'car', nickname: '2018 Toyota Hilux G 4x2', make: 'Toyota', model: 'Hilux G 4x2', year: 2018,
