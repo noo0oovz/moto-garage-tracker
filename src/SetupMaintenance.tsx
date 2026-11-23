@@ -95,7 +95,7 @@ export function SetupMaintenanceModal({ vehicleId, close }: { vehicleId: string;
     <Modal title={step === 1 ? 'Set up maintenance' : `What needs servicing · ${vehicle.nickname}`} onClose={close}>
       {step === 1 ? (
         <div className="space-y-5">
-          <p className="text-sm text-slate-600 dark:text-slate-300">
+          <p className="text-sm text-slate-600">
             Tell us a little about <b>{vehicle.nickname}</b> and we will suggest what to look after and when. You do not need to know any numbers.
           </p>
 
@@ -105,9 +105,9 @@ export function SetupMaintenanceModal({ vehicleId, close }: { vehicleId: string;
               <div className="grid grid-cols-2 gap-2">
                 {TRANSMISSIONS.map((t) => (
                   <button key={t.value} type="button" aria-pressed={transmission === t.value} onClick={() => setTransmission(t.value)}
-                    className={`min-h-14 rounded-xl border px-3 py-2 text-left text-sm transition ${transmission === t.value ? 'border-orange-500 bg-orange-500/10 font-semibold' : 'border-slate-300 dark:border-white/10'}`}>
+                    className={`min-h-14 rounded-xl border px-3 py-2 text-left text-sm transition ${transmission === t.value ? 'border-orange-500 bg-orange-500/10 font-semibold' : 'border-slate-300'}`}>
                     <span className="block">{t.label}</span>
-                    <span className="block text-xs font-normal text-slate-500 dark:text-slate-400">{t.hint}</span>
+                    <span className="block text-xs font-normal text-slate-500">{t.hint}</span>
                   </button>
                 ))}
               </div>
@@ -124,8 +124,8 @@ export function SetupMaintenanceModal({ vehicleId, close }: { vehicleId: string;
                 <div className="grid grid-cols-2 gap-2">
                   {([['cvt', 'Scooter', 'Twist-and-go, no clutch lever'], ['manual', 'Has gears', 'Clutch lever and foot shifter']] as const).map(([value, label, hint]) => (
                     <button key={value} type="button" aria-pressed={transmission === value} onClick={() => setTransmission(value)}
-                      className={`min-h-14 rounded-xl border px-3 py-2 text-left text-sm transition ${transmission === value ? 'border-orange-500 bg-orange-500/10 font-semibold' : 'border-slate-300 dark:border-white/10'}`}>
-                      <span className="block">{label}</span><span className="block text-xs font-normal text-slate-500 dark:text-slate-400">{hint}</span>
+                      className={`min-h-14 rounded-xl border px-3 py-2 text-left text-sm transition ${transmission === value ? 'border-orange-500 bg-orange-500/10 font-semibold' : 'border-slate-300'}`}>
+                      <span className="block">{label}</span><span className="block text-xs font-normal text-slate-500">{hint}</span>
                     </button>
                   ))}
                 </div>
@@ -139,7 +139,7 @@ export function SetupMaintenanceModal({ vehicleId, close }: { vehicleId: string;
               {CONDITIONS.map((c) => (
                 <div key={c.key}>
                   <Toggle checked={!!driving[c.key]} onChange={(on) => setDriving((d) => ({ ...d, [c.key]: on }))} label={c.label} />
-                  <p className="mt-0.5 px-1 text-xs text-slate-500 dark:text-slate-400">{c.hint}</p>
+                  <p className="mt-0.5 px-1 text-xs text-slate-500">{c.hint}</p>
                 </div>
               ))}
             </div>
@@ -149,7 +149,7 @@ export function SetupMaintenanceModal({ vehicleId, close }: { vehicleId: string;
         </div>
       ) : (
         <div className="space-y-4">
-          <p className="flex items-start gap-2 rounded-xl bg-slate-100 p-3 text-xs text-slate-600 dark:bg-white/5 dark:text-slate-300">
+          <p className="flex items-start gap-2 rounded-xl bg-slate-100 p-3 text-xs text-slate-600">
             <Info size={16} className="mt-0.5 shrink-0" aria-hidden />
             <span>These are <b>general guidance</b>, not from your car&rsquo;s own manual. If you have the casa service booklet or sticker, tap an item and type its numbers instead. Not sure when something was done? Pick &ldquo;I don&rsquo;t know&rdquo;. We will simply mark it as worth checking.</span>
           </p>
@@ -165,30 +165,30 @@ export function SetupMaintenanceModal({ vehicleId, close }: { vehicleId: string;
 
           <ul className="space-y-3">
             {rows.map((r, i) => (
-              <li key={r.item.key} className={`rounded-2xl border p-3 transition ${r.on ? 'border-slate-200 dark:border-white/10' : 'border-dashed border-slate-300 opacity-60 dark:border-white/10'}`}>
+              <li key={r.item.key} className={`rounded-2xl border p-3 transition ${r.on ? 'border-slate-200' : 'border-dashed border-slate-300 opacity-60'}`}>
                 <div className="flex items-start gap-2">
                   <button type="button" role="checkbox" aria-checked={r.on} aria-label={`Track ${r.item.name}`} onClick={() => patch(i, { on: !r.on })}
                     className="-m-1.5 grid h-11 w-11 shrink-0 place-items-center">
-                    <span className={`grid h-6 w-6 place-items-center rounded-md border-2 ${r.on ? 'border-orange-500 bg-orange-500 text-white' : 'border-slate-300 dark:border-white/25'}`}>{r.on && <Check size={14} strokeWidth={3} />}</span>
+                    <span className={`grid h-6 w-6 place-items-center rounded-md border-2 ${r.on ? 'border-orange-500 on-brand' : 'border-slate-300'}`}>{r.on && <Check size={14} strokeWidth={3} />}</span>
                   </button>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-bold">{r.item.name}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                    <p className="text-xs text-slate-500">
                       {numVal(r.bookletKm) > 0 || numVal(r.bookletMonths) > 0
                         ? <>From your booklet: {intervalText({ intervalKm: numVal(r.bookletKm) || undefined, intervalMonths: numVal(r.bookletMonths) || undefined })}</>
                         : <>Every {intervalText(r.item)}{r.item.adjusted ? ` · ${r.item.adjusted}` : ''}</>}
                     </p>
-                    <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{r.item.why}</p>
+                    <p className="mt-1 text-xs text-slate-600">{r.item.why}</p>
                   </div>
                 </div>
 
                 {r.on && (
                   <>
-                    <p className="mb-1 mt-3 text-xs font-semibold text-slate-500 dark:text-slate-400">When was this last done?</p>
+                    <p className="mb-1 mt-3 text-xs font-semibold text-slate-500">When was this last done?</p>
                     <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4" role="radiogroup" aria-label={`When was ${r.item.name} last done?`}>
                       {ANSWERS.map((a) => (
                         <button key={a} type="button" role="radio" aria-checked={r.answer === a} onClick={() => patch(i, { answer: a })}
-                          className={`min-h-11 rounded-lg border px-1.5 text-xs font-semibold transition ${r.answer === a ? 'border-orange-500 bg-orange-500 text-white' : 'border-slate-300 text-slate-600 dark:border-white/10 dark:text-slate-300'}`}>
+                          className={`min-h-11 rounded-lg border px-1.5 text-xs font-semibold transition ${r.answer === a ? 'border-orange-500 on-brand' : 'border-slate-300 text-slate-600'}`}>
                           {LAST_DONE_LABEL[a]}
                         </button>
                       ))}

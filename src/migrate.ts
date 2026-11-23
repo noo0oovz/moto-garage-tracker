@@ -97,7 +97,8 @@ export function migrate(raw: unknown, now = new Date(), today = now.toISOString(
   const active = typeof s.activeVehicleId === 'string' && ids.has(s.activeVehicleId) ? s.activeVehicleId : (vehicles[0]?.id ?? '')
   return {
     version: SCHEMA_VERSION, vehicles, maint, fuel, expenses, services, parts, checklist, activeVehicleId: active,
-    theme: s.theme === 'light' ? 'light' : 'dark',
+    // An explicit choice is kept exactly. Anything else (a first run, a missing or unknown value) follows the device.
+    theme: s.theme === 'light' || s.theme === 'dark' ? s.theme : 'system',
     installedAt: typeof s.installedAt === 'string' ? s.installedAt : now.toISOString(),
     lastBackupAt: typeof s.lastBackupAt === 'string' ? s.lastBackupAt : undefined,
   }

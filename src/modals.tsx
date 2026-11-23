@@ -7,11 +7,13 @@ import { peso, todayISO, uid } from './logic'
 import { MONTH_NAMES, codingDayFor, codingIsAuto, nextRenewal } from './plate'
 import { useFuelData } from './useFuelData'
 import { SetupMaintenanceModal } from './SetupMaintenance'
+import { ItemDetailModal } from './ItemDetail'
 import { brandsFor, isProduct, productsFor, type FwProduct } from './pricing'
 
 export type ModalState =
   | { kind: 'log'; tab: 'fuel' | 'expense'; editFuel?: FuelLog; editExpense?: Expense }
   | { kind: 'service'; item: MaintItem }
+  | { kind: 'item'; item: MaintItem }
   | { kind: 'maint'; item?: MaintItem }
   | { kind: 'vehicle'; item?: Vehicle }
   | { kind: 'setup'; vehicleId: string }
@@ -21,6 +23,7 @@ export type ModalState =
 
 export function Modals({ modal, close, openModal }: { modal: ModalState; close: () => void; openModal: (m: ModalState) => void }) {
   if (!modal) return null
+  if (modal.kind === 'item') return <ItemDetailModal itemId={modal.item.id} close={close} openModal={openModal} />
   if (modal.kind === 'setup') return <SetupMaintenanceModal vehicleId={modal.vehicleId} close={close} />
   if (modal.kind === 'part') return <PartModal item={modal.item} close={close} />
   if (modal.kind === 'editService') return <EditServiceModal item={modal.item} close={close} />
@@ -78,10 +81,10 @@ function LogModal({ initial, editFuel, editExpense, close }: { initial: 'fuel' |
 
   return (
     <Modal title={editing ? `Edit ${tab === 'fuel' ? 'Fuel Log' : 'Expense'}` : `Quick Log · ${vehicle.nickname}`} onClose={close}>
-      <div className={`mb-4 grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 dark:bg-black/30 ${editing ? 'hidden' : 'grid'}`}>
+      <div className={`mb-4 grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 ${editing ? 'hidden' : 'grid'}`}>
         {(['fuel', 'expense'] as const).map((t) => (
           <button key={t} type="button" onClick={() => setTab(t)}
-            className={`min-h-11 rounded-lg text-sm font-semibold capitalize transition ${tab === t ? 'bg-orange-500 text-white shadow' : 'text-slate-500'}`}>
+            className={`min-h-11 rounded-lg text-sm font-semibold capitalize transition ${tab === t ? 'on-brand shadow' : 'text-slate-500'}`}>
             {t}
           </button>
         ))}
@@ -334,10 +337,10 @@ function VehicleModal({ item, close, openModal }: { item?: Vehicle; close: () =>
         }}
       >
         {!item && (
-          <div className="col-span-2 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 dark:bg-black/30">
+          <div className="col-span-2 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
             {(['car', 'motorcycle'] as const).map((t) => (
               <button key={t} type="button" onClick={() => setType(t)}
-                className={`min-h-11 rounded-lg text-sm font-semibold capitalize ${type === t ? 'bg-orange-500 text-white' : 'text-slate-500'}`}>{t}</button>
+                className={`min-h-11 rounded-lg text-sm font-semibold capitalize ${type === t ? 'on-brand' : 'text-slate-500'}`}>{t}</button>
             ))}
           </div>
         )}
@@ -364,8 +367,8 @@ function VehicleModal({ item, close, openModal }: { item?: Vehicle; close: () =>
           </select>
         </Field>
         {grades.length > 0 && (
-          <fieldset className="col-span-2 grid grid-cols-2 gap-3 rounded-xl border border-slate-200 p-3 dark:border-white/10">
-            <legend className="px-1 text-xs font-semibold text-slate-500 dark:text-slate-400">Preferred fuel (shown in Fuel Watch)</legend>
+          <fieldset className="col-span-2 grid grid-cols-2 gap-3 rounded-xl border border-slate-200 p-3">
+            <legend className="px-1 text-xs font-semibold text-slate-500">Preferred fuel (shown in Fuel Watch)</legend>
             <Field label="Fuel grade">
               <select className="field" value={prefProduct} onChange={(e) => { setPrefProduct(e.target.value); setPrefBrand('') }}>
                 <option value="">No preference</option>
@@ -388,7 +391,7 @@ function VehicleModal({ item, close, openModal }: { item?: Vehicle; close: () =>
             : `Filled in from the last digit of your plate (${autoCoding}).`}
         </p>
         {renewal && (
-          <p className={`col-span-2 rounded-xl border px-3 py-2 text-xs ${renewal.status === 'overdue' ? 'border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-300' : renewal.status === 'due' || renewal.status === 'soon' ? 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'border-slate-300 text-slate-600 dark:border-white/10 dark:text-slate-300'}`}>
+          <p className={`col-span-2 rounded-xl border px-3 py-2 text-xs ${renewal.status === 'overdue' ? 'border-red-500/40 bg-red-500/10 text-red-600' : renewal.status === 'due' || renewal.status === 'soon' ? 'border-amber-500/40 bg-amber-500/10 text-amber-700' : 'border-slate-300 text-slate-600'}`}>
             {renewal.status === 'overdue'
               ? <>Registration looks <b>overdue</b>: it was due by the end of <b>{MONTH_NAMES[renewal.month - 1]} {renewal.deadline.slice(0, 4)}</b> ({-renewal.daysLeft} day{renewal.daysLeft === -1 ? '' : 's'} ago).</>
               : <>Estimated registration deadline: <b>{MONTH_NAMES[renewal.month - 1]} {renewal.deadline.slice(0, 4)}</b> (by {renewal.deadline.slice(5, 7)}/{renewal.deadline.slice(8)}).</>}

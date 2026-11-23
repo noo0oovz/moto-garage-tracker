@@ -47,11 +47,11 @@ export function FuelPage({ open }: { open: Open }) {
         <RangeSelect value={range} onChange={setRange} />
       </div>
 
-      <div className="rounded-2xl bg-gradient-to-br from-orange-500 to-orange-800 p-6 text-center text-white shadow-lg">
-        <p className="text-sm opacity-90">Total Fuel Expenses</p>
-        <p className="my-1 text-4xl font-extrabold tracking-tight">{peso(data.total, 2)}</p>
-        <p className="text-sm opacity-90">
-          {num(data.liters, 2)} Liters Total{data.eff.avg ? ` · ${data.eff.avg.toFixed(1)} km/L avg` : ''}
+      <div className="card p-6 text-center">
+        <p className="text-[13px] font-medium" style={{ color: 'var(--text-2)' }}>Total fuel spend</p>
+        <p className="num my-1 text-[34px] font-bold leading-tight tracking-tight">{peso(data.total, 2)}</p>
+        <p className="num text-sm" style={{ color: 'var(--text-2)' }}>
+          {num(data.liters, 2)} litres{data.eff.avg ? ` · ${data.eff.avg.toFixed(1)} km/L average` : ''}
         </p>
       </div>
 
@@ -60,7 +60,7 @@ export function FuelPage({ open }: { open: Open }) {
           {data.rows.map((f) => (
             <li key={f.id} className="card p-4">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm text-slate-500 dark:text-slate-400">{fmtDate(f.date)}</p>
+                <p className="text-sm text-slate-500">{fmtDate(f.date)}</p>
                 <div className="flex items-center gap-1">
                   <span className="font-bold text-orange-500">{peso(f.totalCost, 2)}</span>
                   <button aria-label="Edit fuel log" className="grid h-11 w-11 place-items-center rounded-xl text-slate-400 hover:text-orange-500"
@@ -69,13 +69,13 @@ export function FuelPage({ open }: { open: Open }) {
                     onClick={() => { if (confirm('Delete this fuel log?')) deleteLog('fuel', f.id) }}><Trash2 size={16} /></button>
                 </div>
               </div>
-              <div className="mt-1 grid grid-cols-3 gap-2 text-xs text-slate-500 dark:text-slate-400">
-                <div><p>Mileage</p><p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{num(f.odometer)} km</p></div>
-                <div><p>Volume</p><p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{num(f.liters, 2)} L</p></div>
-                <div><p>Efficiency</p><p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{data.eff.map[f.id] ? `${data.eff.map[f.id].toFixed(1)} km/L` : '—'}</p></div>
+              <div className="mt-1 grid grid-cols-3 gap-2 text-xs text-slate-500">
+                <div><p>Mileage</p><p className="text-sm font-semibold text-slate-900">{num(f.odometer)} km</p></div>
+                <div><p>Volume</p><p className="text-sm font-semibold text-slate-900">{num(f.liters, 2)} L</p></div>
+                <div><p>Efficiency</p><p className="text-sm font-semibold text-slate-900">{data.eff.map[f.id] ? `${data.eff.map[f.id].toFixed(1)} km/L` : '—'}</p></div>
               </div>
               {(f.station || !f.fullTank) && (
-                <p className="mt-2 break-words text-xs text-slate-500 dark:text-slate-400">{f.station}{!f.fullTank ? ' · partial fill' : ''}</p>
+                <p className="mt-2 break-words text-xs text-slate-500">{f.station}{!f.fullTank ? ' · partial fill' : ''}</p>
               )}
             </li>
           ))}
@@ -109,8 +109,8 @@ export function HistoryPage({ open }: { open: Open }) {
   return (
     <div className="page space-y-4">
       <div className="card p-4 text-center">
-        <p className="text-xs text-slate-500 dark:text-slate-400">Total Service Spend YTD</p>
-        <p className="text-3xl font-extrabold tracking-tight">{peso(ytd, 2)}</p>
+        <p className="text-xs text-slate-500">Total Service Spend YTD</p>
+        <p className="num text-3xl font-bold tracking-tight">{peso(ytd, 2)}</p>
       </div>
       <div className="flex flex-col gap-2 sm:flex-row">
         <input className="field sm:flex-1" placeholder="Search services…" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -128,7 +128,7 @@ export function HistoryPage({ open }: { open: Open }) {
                 <button aria-label="Delete service record" className="-mr-2 -mt-2 grid h-11 w-11 shrink-0 place-items-center rounded-xl text-slate-400 hover:text-red-500"
                   onClick={() => { if (confirm('Delete this service record (and its linked expense)?')) deleteService(s.id) }}><Trash2 size={16} /></button>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">{num(s.odometer)} km · {fmtDate(s.date)}{s.shopName ? ` · ${s.shopName}` : ''}</p>
+              <p className="text-xs text-slate-500">{num(s.odometer)} km · {fmtDate(s.date)}{s.shopName ? ` · ${s.shopName}` : ''}</p>
               <p className="mt-2 flex items-center justify-between text-base font-bold">
                 {s.cost ? peso(s.cost, 2) : <span className="text-sm font-medium text-slate-400">No cost recorded</span>}
                 <Paperclip size={16} className="text-slate-400" aria-hidden />
@@ -157,8 +157,8 @@ export function PartsPage({ open }: { open: Open }) {
     <div className="page space-y-4">
       <div className="card flex items-center justify-between p-4">
         <div>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Parts &amp; Accessories Spend</p>
-          <p className="text-2xl font-extrabold tracking-tight">{peso(total, 2)}</p>
+          <p className="text-xs text-slate-500">Parts &amp; Accessories Spend</p>
+          <p className="num text-2xl font-bold tracking-tight">{peso(total, 2)}</p>
         </div>
         <button className="btn-primary" onClick={() => open({ kind: 'part' })}><Plus size={16} /> Add part</button>
       </div>
@@ -175,7 +175,7 @@ export function PartsPage({ open }: { open: Open }) {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <h3 className="flex items-center gap-1.5 text-sm font-bold"><Cog size={14} className="shrink-0 text-orange-500" /> <span className="break-words">{p.partType}</span></h3>
-                    <p className="break-words text-xs text-slate-500 dark:text-slate-400">
+                    <p className="break-words text-xs text-slate-500">
                       {[p.brand, p.description, p.partNumber && `#${p.partNumber}`].filter(Boolean).join(' · ') || p.condition}
                     </p>
                   </div>
@@ -184,16 +184,16 @@ export function PartsPage({ open }: { open: Open }) {
                   <button aria-label="Delete part" className="-mr-2 -mt-2 grid h-11 w-11 shrink-0 place-items-center rounded-xl text-slate-400 hover:text-red-500"
                     onClick={() => { if (confirm('Delete this part record (and its linked expense)?')) deletePart(p.id) }}><Trash2 size={16} /></button>
                 </div>
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{p.condition} · {num(p.installedKm)} km · {fmtDate(p.date)}</p>
+                <p className="mt-1 text-xs text-slate-500">{p.condition} · {num(p.installedKm)} km · {fmtDate(p.date)}</p>
                 <div className="mt-2 flex items-center justify-between">
                   <span className="text-base font-bold">{peso(p.amount, 2)}</span>
                   {w && (
-                    <span className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${w.active ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-slate-500/15 text-slate-500'}`}>
+                    <span className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${w.active ? 'bg-emerald-500/15 text-emerald-600' : 'bg-slate-500/15 text-slate-500'}`}>
                       <ShieldCheck size={12} /> {w.active ? `Warranty ${w.days}d left` : 'Warranty expired'}
                     </span>
                   )}
                 </div>
-                {p.notes && <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{p.notes}</p>}
+                {p.notes && <p className="mt-2 text-xs text-slate-500">{p.notes}</p>}
               </li>
             )
           })}

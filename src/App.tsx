@@ -1,16 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  Bike, Car, Cog, DatabaseBackup, Fuel, Gauge, History, LayoutDashboard, ListChecks, MoreHorizontal, Moon, Plus, Receipt, Settings, Sun, Wrench,
+  Car, Cog, DatabaseBackup, Fuel, Gauge, History, LayoutDashboard, ListChecks, Monitor, MoreHorizontal, Moon, Plus, Receipt, Settings, Sun, Wrench,
 } from 'lucide-react'
 import { useStore } from './store'
 import { Modals, type ModalState } from './modals'
-import { ChecklistPage, CodingBanner, GaragePage, LogsPage, MorePage, SettingsPage, VehiclesPage } from './pages'
+import { ChecklistPage, LogsPage, VehiclesPage } from './pages'
+import { GaragePage } from './GarageScreen'
+import { MorePage, SettingsPage } from './SettingsPages'
 import { FuelPage, HistoryPage, PartsPage } from './pages2'
 import { FuelWatchPage } from './FuelWatch'
 import { Welcome } from './Welcome'
+import { VehicleSwitcher } from './VehicleSwitcher'
 import { useLayout } from './useLayout'
 import type { Page } from './types'
-import { backupStatus, num } from './logic'
+import { backupStatus } from './logic'
+import { THEME_CHOICES } from './theme'
 
 type NavItem = { page: Page; label: string; icon: typeof Car }
 // Phone bottom bar: four destinations plus the centre quick-log button; the rest live under More.
@@ -42,7 +46,7 @@ const COMPACT_TITLES: Partial<Record<Page, string>> = { logs: 'Logs', checklist:
 const MORE_PAGES: Page[] = ['vehicles', 'settings', 'fuel', 'history', 'parts', 'fuelwatch']
 
 export default function App() {
-  const { state, vehicle, setActive, toggleTheme } = useStore()
+  const { state, vehicle, setTheme } = useStore()
   const layout = useLayout()
   const [page, setPage] = useState<Page>('garage')
   const [modal, setModal] = useState<ModalState>(null)
@@ -60,12 +64,12 @@ export default function App() {
   useEffect(() => { window.scrollTo(0, 0) }, [page])
   useEffect(() => { if (layout !== 'phone' && page === 'more') setPage('garage') }, [layout, page])
 
-  const switcher = (cls: string) => (
-    <select aria-label="Active vehicle" className={cls} value={vehicle?.id ?? ''} onChange={(e) => setActive(e.target.value)}>
-      {state.vehicles.map((v) => <option key={v.id} value={v.id}>{v.nickname}</option>)}
-    </select>
-  )
-  const ThemeIcon = state.theme === 'dark' ? Sun : Moon
+  // The quick theme button steps Automatic -> Light -> Dark. The icon shows the CURRENT choice, so "automatic" is visible.
+  const ThemeIcon = state.theme === 'system' ? Monitor : state.theme === 'dark' ? Moon : Sun
+  const nextTheme = THEME_CHOICES[(THEME_CHOICES.indexOf(state.theme) + 1) % THEME_CHOICES.length]
+  const themeName = state.theme === 'system' ? 'Automatic' : state.theme === 'dark' ? 'Dark' : 'Light'
+  const themeLabel = `Appearance: ${themeName.toLowerCase()}. Switch to ${nextTheme === 'system' ? 'automatic' : nextTheme}`
+  const cycleTheme = () => setTheme(nextTheme)
   const backup = backupStatus(state)
   const phone = layout === 'phone'
   const sidebar = layout === 'desktop'
@@ -74,33 +78,39 @@ export default function App() {
 
   // Nothing to lose until the user has added a vehicle, so an empty garage never nags about backups.
   const backupBanner = backup.due && !empty && page !== 'settings' && (
-    <div role="status" className="mx-auto mt-3 flex w-[calc(100%-2rem)] max-w-7xl items-center gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300 md:w-[calc(100%-3rem)]">
+    <div role="status" className="mx-auto mt-3 flex w-[calc(100%-2rem)] max-w-7xl items-center gap-3 px-4 py-3 text-sm md:w-[calc(100%-3rem)]"
+      style={{ background: 'var(--soon-bg)', color: 'var(--soon)', borderRadius: 'var(--r-card)' }}>
       <DatabaseBackup size={18} className="shrink-0" />
       <span className="min-w-0 flex-1">
         {backup.never ? 'You haven’t backed up yet.' : `Last backup was ${backup.days} days ago.`} Your data only lives in this browser.
       </span>
-      <button className="btn-ghost !min-h-11 shrink-0" onClick={() => go('settings')}>Back up</button>
+      <button className="btn-ghost !min-h-11 shrink-0" style={{ color: 'inherit' }} onClick={() => go('settings')}>Back up</button>
     </div>
   )
+
+  const themeButton = (cls: string) => (
+    <button onClick={cycleTheme} aria-label={themeLabel} title={themeLabel} className={cls} style={{ color: 'var(--text-2)' }}><ThemeIcon size={18} /></button>
+  )
+  const brandMark = (size: number) => (
+    <span className="grid shrink-0 place-items-center rounded-[10px]" style={{ width: size, height: size, background: 'var(--brand)', color: 'var(--brand-on)' }}><Wrench size={size * 0.5} /></span>
+  )
+  // Neutral navigation: only the active item carries the brand colour.
+  const navClass = (active: boolean) => `transition ${active ? '' : 'hover:bg-[var(--surface-2)]'}`
+  const navStyle = (active: boolean) => (active ? { background: 'var(--brand-bg)', color: 'var(--brand)' } : { color: 'var(--text-2)' })
+  // Translucent, hairline-edged bars (as on iOS), not coloured ones.
+  const barStyle = { background: 'color-mix(in srgb, var(--surface) 82%, transparent)', borderColor: 'var(--hairline)' }
 
   return (
     <div className="min-h-dvh overflow-x-hidden">
       {/* Desktop sidebar: scrolls by itself when the window is short, so nothing is ever unreachable. */}
       {sidebar && (
-        <aside className="fixed inset-y-0 left-0 z-30 flex w-64 flex-col gap-4 overflow-y-auto overscroll-contain border-r border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-[#0f1520]">
-          <div className="flex items-center gap-2 px-1 text-lg font-extrabold">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-orange-500 text-white"><Wrench size={18} /></span> MotoGarage PH
-          </div>
-          {vehicle && (
-            <div className="space-y-2">
-              {switcher('field font-semibold')}
-              <CodingBanner v={vehicle} compact />
-            </div>
-          )}
-          <nav className="space-y-1" aria-label="Main">
+        <aside className="fixed inset-y-0 left-0 z-30 flex w-64 flex-col gap-5 overflow-y-auto overscroll-contain border-r p-4" style={{ ...barStyle, background: 'var(--surface)' }}>
+          <div className="flex items-center gap-2.5 px-1 text-[17px] font-semibold tracking-tight">{brandMark(32)} MotoGarage PH</div>
+          {vehicle && <VehicleSwitcher onAdd={addVehicle} />}
+          <nav className="space-y-0.5" aria-label="Main">
             {ALL.map((n) => (
               <button key={n.page} onClick={() => go(n.page)} aria-current={page === n.page ? 'page' : undefined}
-                className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-sm font-semibold transition ${page === n.page ? 'bg-orange-500/15 text-orange-500' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/5'}`}>
+                className={`flex min-h-11 w-full items-center gap-3 px-3 text-[15px] font-medium ${navClass(page === n.page)}`} style={{ ...navStyle(page === n.page), borderRadius: 'var(--r-ctl)' }}>
                 <n.icon size={18} /> {n.label}
               </button>
             ))}
@@ -114,60 +124,52 @@ export default function App() {
                 <button className="btn-ghost w-full" onClick={() => open({ kind: 'log', tab: 'expense' })}><Wrench size={16} /> Log Service</button>
               </>
             )}
-            <button className="btn-ghost w-full" onClick={toggleTheme}><ThemeIcon size={16} /> {state.theme === 'dark' ? 'Light' : 'Dark'} mode</button>
+            <button className="btn-ghost w-full" onClick={cycleTheme} aria-label={themeLabel}><ThemeIcon size={16} /> {themeName} appearance</button>
           </div>
         </aside>
       )}
 
       {/* Tablet / landscape-phone rail: every destination, scrolls when the screen is short. */}
       {rail && (
-        <nav aria-label="Main" className={`fixed inset-y-0 left-0 z-30 flex w-20 flex-col items-center gap-1 overflow-y-auto overscroll-contain border-r border-slate-200 bg-white dark:border-white/10 dark:bg-[#0f1520] ${compact ? 'py-2' : 'py-3'}`}
-          style={{ paddingLeft: 'env(safe-area-inset-left)' }}>
-          {!compact && <span className="mb-2 grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-orange-500 text-white"><Wrench size={20} /></span>}
+        <nav aria-label="Main" className={`fixed inset-y-0 left-0 z-30 flex w-20 flex-col items-center gap-1 overflow-y-auto overscroll-contain border-r ${compact ? 'py-2' : 'py-3'}`}
+          style={{ ...barStyle, background: 'var(--surface)', paddingLeft: 'env(safe-area-inset-left)' }}>
+          {!compact && <span className="mb-2 shrink-0">{brandMark(40)}</span>}
           {ALL.map((n) => (
             <button key={n.page} onClick={() => go(n.page)} aria-current={page === n.page ? 'page' : undefined}
-              className={`flex min-h-12 w-[4.5rem] shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 text-[10px] font-semibold leading-tight transition ${page === n.page ? 'bg-orange-500/15 text-orange-500' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5'}`}>
+              className={`flex min-h-12 w-[4.5rem] shrink-0 flex-col items-center justify-center gap-0.5 px-0.5 text-[10px] font-medium leading-tight ${navClass(page === n.page)}`} style={{ ...navStyle(page === n.page), borderRadius: 'var(--r-ctl)' }}>
               <n.icon size={20} /> <span className="text-center">{SHORT_LABEL[n.page] ?? n.label}</span>
             </button>
           ))}
-          <button onClick={toggleTheme} aria-label="Toggle theme" className="mt-auto grid h-11 w-11 shrink-0 place-items-center rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5"><ThemeIcon size={20} /></button>
+          {themeButton('mt-auto grid h-11 w-11 shrink-0 place-items-center rounded-full hover:bg-[var(--surface-2)]')}
         </nav>
       )}
 
       <div className={sidebar ? 'pl-64' : rail ? 'pl-20' : ''} style={rail ? { paddingLeft: 'calc(5rem + env(safe-area-inset-left))' } : undefined}>
-        {/* Phone header */}
+        {/* Phone header: the vehicle card is the whole header. */}
         {phone && (
-          <header className="pt-safe sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-white/10 dark:bg-[#0b0f17]/90">
-            <div className="flex items-center gap-2 px-3 py-2">
+          <header className="pt-safe sticky top-0 z-20 border-b backdrop-blur-xl" style={barStyle}>
+            <div className="flex items-center gap-2 px-4 py-2">
               {empty ? (
-                <span className="flex min-h-11 min-w-0 flex-1 items-center gap-2 px-1 text-base font-extrabold">
-                  <span className="grid h-8 w-8 place-items-center rounded-lg bg-orange-500 text-white"><Wrench size={16} /></span> MotoGarage PH
-                </span>
+                <span className="flex min-h-11 min-w-0 flex-1 items-center gap-2.5 text-[17px] font-semibold tracking-tight">{brandMark(32)} MotoGarage PH</span>
               ) : (
-                <>
-                  {switcher('field !min-h-11 min-w-0 flex-1 font-semibold')}
-                  <span className="flex h-11 shrink-0 items-center gap-1 rounded-xl bg-orange-500/15 px-3 text-xs font-bold text-orange-500">
-                    {vehicle?.type === 'motorcycle' ? <Bike size={14} /> : <Car size={14} />}{num(vehicle?.odometer ?? 0)} km
-                  </span>
-                </>
+                <div className="min-w-0 flex-1"><VehicleSwitcher onAdd={addVehicle} /></div>
               )}
-              <button onClick={toggleTheme} aria-label="Toggle theme" className="grid h-11 w-11 shrink-0 place-items-center rounded-xl hover:bg-slate-100 dark:hover:bg-white/5"><ThemeIcon size={18} /></button>
+              {themeButton('grid h-11 w-11 shrink-0 place-items-center rounded-full hover:bg-[var(--surface-2)]')}
             </div>
           </header>
         )}
 
         {/* Tablet / compact / desktop top bar. The compact bar is a single slim row. */}
         {!phone && (
-          <header className={`sticky top-0 z-20 flex items-center gap-2 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-white/10 dark:bg-[#0b0f17]/90 ${compact ? 'px-3 py-1.5' : 'gap-3 px-6 py-3'}`}>
+          <header className={`sticky top-0 z-20 flex items-center gap-3 border-b backdrop-blur-xl ${compact ? 'px-4 py-1.5' : 'px-6 py-3'}`} style={barStyle}>
             <div className="min-w-0 flex-1">
-              <h1 className={`font-bold leading-tight ${compact ? 'text-base' : 'text-lg'}`}>{compact ? (COMPACT_TITLES[page] ?? TITLES[page]) : TITLES[page]}</h1>
-              {!compact && <p className="text-xs text-slate-500 dark:text-slate-400">{vehicle ? `${vehicle.nickname} · ${num(vehicle.odometer)} km` : ''}</p>}
+              <h1 className={`font-bold leading-tight tracking-tight ${compact ? 'text-base' : 'text-[22px]'}`}>{compact ? (COMPACT_TITLES[page] ?? TITLES[page]) : TITLES[page]}</h1>
             </div>
             {empty ? (
               <button className="btn-primary" onClick={addVehicle}><Plus size={16} /> Add vehicle</button>
             ) : (
               <>
-                {!sidebar && switcher(`field min-w-0 shrink font-semibold ${compact ? '!w-40' : '!w-56'}`)}
+                {!sidebar && <div className={compact ? 'w-44' : 'w-64'}><VehicleSwitcher compact onAdd={addVehicle} /></div>}
                 <button className="btn-primary" onClick={() => open({ kind: 'log', tab: 'fuel' })}><Plus size={16} /> {compact ? 'Fuel' : 'Log Fuel'}</button>
                 <button className="btn-ghost" onClick={() => open({ kind: 'log', tab: 'expense' })}><Plus size={16} /> {compact ? 'Service' : 'Log Service'}</button>
               </>
@@ -176,7 +178,7 @@ export default function App() {
         )}
 
         {backupBanner}
-        <main ref={mainRef} className={`mx-auto w-full max-w-7xl px-4 pt-4 md:px-6 ${phone ? 'pb-28' : 'pb-10 md:pt-6'}`}
+        <main ref={mainRef} className={`mx-auto w-full max-w-7xl px-4 pt-5 md:px-6 ${phone ? 'pb-28' : 'pb-10 md:pt-6'}`}
           style={{ paddingRight: 'max(1rem, env(safe-area-inset-right))' }}>
           {empty && NEEDS_VEHICLE.includes(page) && <Welcome onAdd={addVehicle} go={go} page={page} />}
           {!empty && page === 'garage' && <GaragePage open={open} go={go} />}
@@ -192,23 +194,26 @@ export default function App() {
         </main>
       </div>
 
-      {/* Phone bottom nav */}
+      {/* Phone bottom nav: translucent tab bar; the centre button is the single quick action. */}
       {phone && (
-        <nav aria-label="Main" className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur dark:border-white/10 dark:bg-[#0f1520]/95">
+        <nav aria-label="Main" className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t backdrop-blur-xl" style={barStyle}>
           <div className="grid grid-cols-5 items-center">
             {[NAV[0], NAV[1]].map((n) => (
-              <button key={n.page} onClick={() => go(n.page)} aria-current={isActive(n.page) ? 'page' : undefined} className={`flex min-h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-semibold ${isActive(n.page) ? 'text-orange-500' : 'text-slate-500'}`}>
-                <n.icon size={20} /> {n.label}
+              <button key={n.page} onClick={() => go(n.page)} aria-current={isActive(n.page) ? 'page' : undefined}
+                className="flex min-h-14 flex-col items-center justify-center gap-0.5 text-[10px] font-medium" style={{ color: isActive(n.page) ? 'var(--brand)' : 'var(--text-2)' }}>
+                <n.icon size={22} /> {n.label}
               </button>
             ))}
             <div className="flex justify-center">
-              <button onClick={() => (empty ? addVehicle() : open({ kind: 'log', tab: 'fuel' }))} aria-label={empty ? 'Add vehicle' : 'Quick log'} className="-mt-6 grid h-14 w-14 place-items-center rounded-full bg-orange-500 text-white shadow-lg shadow-orange-500/40 transition active:scale-95">
+              <button onClick={() => (empty ? addVehicle() : open({ kind: 'log', tab: 'fuel' }))} aria-label={empty ? 'Add vehicle' : 'Quick log'}
+                className="-mt-5 grid h-14 w-14 place-items-center rounded-full transition active:scale-95" style={{ background: 'var(--brand)', color: 'var(--brand-on)', boxShadow: '0 4px 14px color-mix(in srgb, var(--brand) 35%, transparent)' }}>
                 <Plus size={26} />
               </button>
             </div>
             {[NAV[2], NAV[3]].map((n) => (
-              <button key={n.page} onClick={() => go(n.page)} aria-current={isActive(n.page) ? 'page' : undefined} className={`flex min-h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-semibold ${isActive(n.page) ? 'text-orange-500' : 'text-slate-500'}`}>
-                <n.icon size={20} /> {n.label}
+              <button key={n.page} onClick={() => go(n.page)} aria-current={isActive(n.page) ? 'page' : undefined}
+                className="flex min-h-14 flex-col items-center justify-center gap-0.5 text-[10px] font-medium" style={{ color: isActive(n.page) ? 'var(--brand)' : 'var(--text-2)' }}>
+                <n.icon size={22} /> {n.label}
               </button>
             ))}
           </div>

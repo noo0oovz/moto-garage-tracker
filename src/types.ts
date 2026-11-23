@@ -119,7 +119,8 @@ export interface PartRecord {
   notes: string
 }
 
-export type ThemeMode = 'dark' | 'light'
+/** 'system' follows the device (light by day, dark by night); 'light' and 'dark' are the user's explicit choice. */
+export type ThemeMode = 'system' | 'light' | 'dark'
 
 export interface AppState {
   version: number

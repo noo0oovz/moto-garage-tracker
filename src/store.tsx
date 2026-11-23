@@ -1,8 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { AppState, Expense, FuelLog, MaintItem, PartRecord, ServiceRecord, Vehicle } from './types'
+import type { AppState, Expense, FuelLog, MaintItem, PartRecord, ServiceRecord, ThemeMode, Vehicle } from './types'
 import { STORAGE_KEY, buildDemoState, buildEmptyState } from './data'
 import { latestService, syncLinkedExpense, todayISO, uid } from './logic'
 import { migrate } from './migrate'
+import { resolveTheme, themeColor } from './theme'
 
 function load(): AppState {
   try {
@@ -28,7 +29,7 @@ interface Store {
   state: AppState
   vehicle: Vehicle | undefined
   setActive: (id: string) => void
-  toggleTheme: () => void
+  setTheme: (t: ThemeMode) => void
   saveVehicle: (v: Omit<Vehicle, 'id'> & { id?: string }) => void
   deleteVehicle: (id: string) => void
   saveMaint: (m: Omit<MaintItem, 'id'> & { id?: string }) => void
@@ -78,18 +79,31 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // Skip the write when this state came from the other tab (it is already stored).
       if (json !== lastWritten.current) { localStorage.setItem(STORAGE_KEY, json); lastWritten.current = json }
     } catch { /* quota/private mode */ }
-    const light = state.theme === 'light'
-    document.documentElement.classList.toggle('dark', !light)
-    document.documentElement.style.colorScheme = light ? 'light' : 'dark'
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', light ? '#f4f6fa' : '#0b0f17')
   }, [state])
+
+  // Apply the theme. 'system' follows the device and keeps following it while the app is open (e.g. at sunset).
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    const apply = () => {
+      const resolved = resolveTheme(state.theme, mq.matches)
+      const root = document.documentElement
+      root.classList.toggle('dark', resolved === 'dark')
+      root.style.colorScheme = resolved
+      root.dataset.theme = resolved
+      document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', themeColor(resolved)))
+    }
+    apply()
+    if (state.theme !== 'system') return
+    mq.addEventListener('change', apply)
+    return () => mq.removeEventListener('change', apply)
+  }, [state.theme])
 
   const bumpOdo = (vehicles: Vehicle[], id: string, odo?: number) =>
     odo ? vehicles.map((v) => (v.id === id && odo > v.odometer ? { ...v, odometer: odo } : v)) : vehicles
 
   const api = useMemo<Omit<Store, 'state' | 'vehicle'>>(() => ({
     setActive: (id) => setState((s) => ({ ...s, activeVehicleId: id })),
-    toggleTheme: () => setState((s) => ({ ...s, theme: s.theme === 'dark' ? 'light' : 'dark' })),
+    setTheme: (theme) => setState((s) => ({ ...s, theme })),
     saveVehicle: (v) => setState((s) => {
       // An id that already exists is an edit. A new vehicle may arrive with a pre-made id (so the setup dialog can open
       // for it straight away) or without one; either way it is added, becomes the active vehicle, and gets NO
@@ -208,7 +222,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return true
       } catch { return false }
     },
-    resetDemo: () => setState(buildDemoState(todayISO())),
+    resetDemo: () => setState((s) => ({ ...buildDemoState(todayISO()), theme: s.theme })),
   }), [])
 
   const setActive = useCallback(api.setActive, [api])

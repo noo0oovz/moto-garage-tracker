@@ -72,7 +72,7 @@ export const CHECKLIST_MOTO = [
 export function buildEmptyState(): AppState {
   return {
     version: SCHEMA_VERSION, vehicles: [], maint: [], fuel: [], expenses: [], services: [], parts: [],
-    checklist: {}, activeVehicleId: '', theme: 'dark', installedAt: new Date().toISOString(),
+    checklist: {}, activeVehicleId: '', theme: 'system', installedAt: new Date().toISOString(),
   }
 }
 
@@ -172,7 +172,7 @@ export function buildDemoState(today: string): AppState {
     parts,
     checklist: {},
     activeVehicleId: hilux.id,
-    theme: 'dark',
+    theme: 'system',
     installedAt: new Date().toISOString(),
   }
 }

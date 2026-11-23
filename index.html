@@ -1,15 +1,38 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#0b0f17" />
+    <meta name="color-scheme" content="light dark" />
+    <!-- Browser / status bar colour: matches the page canvas in each mode. The script below fixes it when the user has
+         chosen a theme that differs from the device. -->
+    <meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./icon-192.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="MotoGarage" />
     <title>MotoGarage PH</title>
+    <script>
+      // Runs before first paint so there is no light/dark flash. Mirrors resolveTheme() in src/theme.ts:
+      // an explicit "light"/"dark" in the saved data wins; anything else follows the device.
+      (function () {
+        var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+        try {
+          var saved = JSON.parse(localStorage.getItem('motogarage-ph') || 'null')
+          if (saved && (saved.theme === 'light' || saved.theme === 'dark')) dark = saved.theme === 'dark'
+        } catch (e) { /* storage blocked or unreadable: follow the device */ }
+        var r = document.documentElement
+        if (dark) r.classList.add('dark')
+        r.style.colorScheme = dark ? 'dark' : 'light'
+        r.dataset.theme = dark ? 'dark' : 'light'
+        var bg = dark ? '#000000' : '#F2F2F7'
+        r.style.backgroundColor = bg
+        var metas = document.querySelectorAll('meta[name="theme-color"]')
+        for (var i = 0; i < metas.length; i++) { metas[i].removeAttribute('media'); metas[i].setAttribute('content', bg) }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>
