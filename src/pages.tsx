@@ -8,7 +8,8 @@ import { Empty, Progress } from './ui'
 import type { ModalState } from './modals'
 import type { Page, Vehicle } from './types'
 import {
-  backupStatus, buildLedger, codingStatus, csvEscape, fmtDate, fuelEfficiency, loggedKmSpan, maintHealth, num, peso, spendSummary, statusColor, todayISO,
+  backupStatus, buildLedger, codingStatus, csvEscape, fmtDate, fuelEfficiency, loggedKmSpan, maintHealth, num, overallHealth, peso, spendSummary, statusColor, todayISO,
+  type OverallHealth, type OverallLevel,
 } from './logic'
 import { CHECKLIST_CAR, CHECKLIST_MOTO } from './data'
 import { useMinWidth } from './useLayout'
@@ -49,6 +50,59 @@ function Kpi({ icon: Icon, label, value, sub }: { icon: typeof Gauge; label: str
       </div>
       <p className="text-2xl font-extrabold tracking-tight">{value}</p>
       {sub && <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{sub}</p>}
+    </div>
+  )
+}
+
+const LEVEL_STYLE: Record<OverallLevel, { label: string; ring: string; text: string; blurb: string }> = {
+  excellent: { label: 'Excellent', ring: 'stroke-emerald-500', text: 'text-emerald-600 dark:text-emerald-400', blurb: 'Everything is within its service interval.' },
+  good: { label: 'Good', ring: 'stroke-emerald-500', text: 'text-emerald-600 dark:text-emerald-400', blurb: 'In good shape, with something coming up soon.' },
+  fair: { label: 'Needs attention', ring: 'stroke-amber-500', text: 'text-amber-600 dark:text-amber-400', blurb: 'Some items need servicing.' },
+  poor: { label: 'Needs service', ring: 'stroke-red-500', text: 'text-red-600 dark:text-red-400', blurb: 'Several items are overdue. Service soon.' },
+  none: { label: 'No data', ring: 'stroke-slate-400', text: 'text-slate-500', blurb: 'Add maintenance items to track this vehicle.' },
+}
+
+/** Overall vehicle health: a ring with the score, a plain-language label, the counts, and what to fix first. */
+export function OverallHealthCard({ o, vehicleName }: { o: OverallHealth; vehicleName: string }) {
+  const st = LEVEL_STYLE[o.level]
+  const R = 42, C = 2 * Math.PI * R
+  const score = o.score ?? 0
+  return (
+    <div className="card mb-3 flex flex-col gap-4 p-4 sm:flex-row sm:items-center" role="group" aria-label={`Overall health of ${vehicleName}`}>
+      <div className="relative mx-auto h-28 w-28 shrink-0 sm:mx-0" aria-hidden>
+        <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90">
+          <circle cx="50" cy="50" r={R} fill="none" strokeWidth="9" className="stroke-slate-200 dark:stroke-white/10" />
+          {o.score !== null && (
+            <circle cx="50" cy="50" r={R} fill="none" strokeWidth="9" strokeLinecap="round" className={`${st.ring} transition-all duration-700`}
+              strokeDasharray={C} strokeDashoffset={C * (1 - score / 100)} />
+          )}
+        </svg>
+        <div className="absolute inset-0 grid place-items-center text-center">
+          <div>
+            <p className="text-3xl font-extrabold leading-none tabular-nums">{o.score ?? '—'}</p>
+            {o.score !== null && <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">of 100</p>}
+          </div>
+        </div>
+      </div>
+      <div className="min-w-0 flex-1 text-center sm:text-left">
+        <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Overall health</p>
+        <p className={`text-xl font-extrabold ${st.text}`}>
+          {o.score !== null && <span className="sr-only">{o.score} out of 100. </span>}{st.label}
+        </p>
+        <p className="text-sm text-slate-600 dark:text-slate-300">{st.blurb}</p>
+        {o.total > 0 && (
+          <ul className="mt-2 flex flex-wrap justify-center gap-1.5 text-xs font-semibold sm:justify-start" aria-label="Items by status">
+            <li className={`rounded-full px-2.5 py-1 ${statusColor.Healthy.badge}`}>{o.healthy} healthy</li>
+            {o.dueSoon > 0 && <li className={`rounded-full px-2.5 py-1 ${statusColor['Due Soon'].badge}`}>{o.dueSoon} due soon</li>}
+            {o.overdue > 0 && <li className={`rounded-full px-2.5 py-1 ${statusColor.Overdue.badge}`}>{o.overdue} overdue</li>}
+          </ul>
+        )}
+        {o.worst && (
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            {o.worst.status === 'Overdue' ? 'Most overdue' : 'Next up'}: <b className="text-slate-700 dark:text-slate-200">{o.worst.name}</b>
+          </p>
+        )}
+      </div>
     </div>
   )
 }
@@ -116,7 +170,7 @@ export function GaragePage({ open, go }: { open: Open; go: (p: Page) => void }) 
     const items = state.maint.filter((m) => m.vehicleId === vehicle.id)
       .map((m) => ({ m, h: maintHealth(m, vehicle) }))
       .sort((a, b) => b.h.pct - a.h.pct)
-    return { eff, sum, items }
+    return { eff, sum, items, overall: overallHealth(items.map(({ m, h }) => ({ name: m.name, h }))) }
   }, [state, vehicle])
 
   if (!vehicle || !data) return <Empty>No vehicles yet. Add one from More → Vehicles.</Empty>
@@ -150,6 +204,7 @@ export function GaragePage({ open, go }: { open: Open; go: (p: Page) => void }) 
           <h2 className="text-lg font-bold">Maintenance Health</h2>
           <button className="btn-ghost !min-h-11" onClick={() => open({ kind: 'maint' })}><Plus size={16} /> Add item</button>
         </div>
+        <OverallHealthCard o={data.overall} vehicleName={vehicle.nickname} />
         {data.items.length === 0 ? <Empty>No maintenance items yet.</Empty> : (
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
             {data.items.map(({ m, h }) => (

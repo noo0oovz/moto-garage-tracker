@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import fs from 'node:fs'
 import {
   addDays, addMonths, backupStatus, buildLedger, codingStatus, csvEscape, daysBetween, fmtDate, fuelEfficiency, loggedKmSpan,
-  maintHealth, num, parseISO, peso, spendSummary, syncLinkedExpense, todayISO,
+  itemPoints, maintHealth, num, overallHealth, parseISO, peso, spendSummary, syncLinkedExpense, todayISO,
 } from './logic'
 import { migrate } from './migrate'
 import { buildDemoState } from './data'
@@ -351,6 +351,100 @@ describe('registeredFor survives import and is validated', () => {
       const r = migrate(s)
       expect(r, JSON.stringify(bad)).not.toBeNull()
       expect(r!.vehicles[0].registeredFor, JSON.stringify(bad)).toBeUndefined()
+    }
+  })
+})
+
+describe('overallHealth', () => {
+  const st = (pct: number) => (pct >= 100 ? 'Overdue' : pct >= 85 ? 'Due Soon' : 'Healthy') as 'Healthy' | 'Due Soon' | 'Overdue'
+  const it_ = (name: string, pct: number) => ({ name, h: { status: st(pct), pct } })
+
+  it('item points follow the status the badge shows', () => {
+    expect(itemPoints({ status: 'Healthy', pct: 0 })).toBe(100)
+    expect(itemPoints({ status: 'Healthy', pct: 84 })).toBeCloseTo(70.6)
+    expect(itemPoints({ status: 'Due Soon', pct: 85 })).toBe(60)
+    expect(itemPoints({ status: 'Due Soon', pct: 99 })).toBe(32)
+    expect(itemPoints({ status: 'Overdue', pct: 100 })).toBe(0)
+  })
+  it('a worn-but-healthy item is always worth more than any due-soon item, which is worth more than overdue', () => {
+    expect(itemPoints({ status: 'Healthy', pct: 84.9 })).toBeGreaterThan(itemPoints({ status: 'Due Soon', pct: 85 }))
+    expect(itemPoints({ status: 'Due Soon', pct: 99.9 })).toBeGreaterThan(itemPoints({ status: 'Overdue', pct: 100 }))
+  })
+  it('points are safe for NaN and out-of-range percentages', () => {
+    for (const pct of [NaN, -20, 1e9, Infinity]) for (const status of ['Healthy', 'Due Soon', 'Overdue'] as const) {
+      const p = itemPoints({ status, pct })
+      expect(Number.isFinite(p), `${status} ${pct}`).toBe(true)
+      expect(p).toBeGreaterThanOrEqual(0); expect(p).toBeLessThanOrEqual(100)
+    }
+  })
+  it('is null with nothing to judge, never 100 or NaN', () => {
+    expect(overallHealth([])).toMatchObject({ score: null, level: 'none', total: 0 })
+  })
+  it('a fully fresh vehicle scores 100 and is excellent', () => {
+    const o = overallHealth([it_('a', 0), it_('b', 0), it_('c', 0)])
+    expect(o).toMatchObject({ score: 100, level: 'excellent' })
+    expect(o.worst).toBeUndefined()
+  })
+  it('well-used but healthy items still read as a good vehicle (not punished for normal wear)', () => {
+    // every item at 70% used: still Healthy. Each is 100 - 70*0.35 = 75.5
+    const o = overallHealth([it_('a', 70), it_('b', 70), it_('c', 70)])
+    expect(o.level).toBe('excellent')
+    expect(o.score).toBe(76) // avg 75.5 *0.75 + weakest 75.5 *0.25 = 75.5 -> 76
+  })
+  it('one overdue item among many healthy ones is NOT reported as fine', () => {
+    const o = overallHealth([it_('belt', 100), ...['a', 'b', 'c', 'd', 'e', 'f'].map((n) => it_(n, 5))])
+    // points: [0, 98.25 x 6] -> avg 84.2, weakest 0 -> 63.2; a plain average would say 84 and hide the belt
+    expect(o.score).toBe(63)
+    expect(o.level).toBe('fair')
+    expect(o.worst).toMatchObject({ name: 'belt', status: 'Overdue' })
+  })
+  it('the demo pickup, worked by hand: 4 healthy + 2 due soon + 1 overdue', () => {
+    // pct used: oil 94, fuel filter 64, air filter 100, tires 34, brakes 75, diff 96, coolant 83
+    // points: 42, 77.6, 0, 88.1, 73.75, 38, 70.95 -> sum 390.4, avg 55.77, weakest 0 -> 41.8 -> 42
+    const o = overallHealth([it_('oil', 94), it_('fuel', 64), it_('air', 100), it_('tires', 34), it_('brakes', 75), it_('diff', 96), it_('coolant', 83)])
+    expect(o.score).toBe(42)
+    expect(o).toMatchObject({ level: 'fair', healthy: 4, dueSoon: 2, overdue: 1 })
+    expect(o.worst?.name).toBe('air')
+  })
+  it('a third or more overdue, or two overdue items, is poor', () => {
+    expect(overallHealth([it_('a', 100), it_('b', 120), it_('c', 0), it_('d', 0), it_('e', 0), it_('f', 0)]).level).toBe('poor')
+    expect(overallHealth([it_('a', 100), it_('b', 0), it_('c', 0)]).level).toBe('poor')
+    expect(overallHealth([it_('a', 100)]).level).toBe('poor')
+    expect(overallHealth([it_('a', 100), it_('b', 0), it_('c', 0), it_('d', 0)]).level).toBe('fair')
+  })
+  it('everything overdue scores 0', () => {
+    expect(overallHealth([it_('a', 100), it_('b', 150), it_('c', 300)]).score).toBe(0)
+  })
+  it('due-soon items alone: good when few, fair when most items are due soon', () => {
+    expect(overallHealth([it_('a', 90), it_('b', 5), it_('c', 5), it_('d', 5)]).level).toBe('good')
+    expect(overallHealth([it_('a', 90), it_('b', 95), it_('c', 99), it_('d', 5)]).level).toBe('fair')
+  })
+  it('score stays within 0-100 and counts add up for absurd input', () => {
+    for (const pct of [-50, 0, 100, 1e9, NaN]) {
+      const o = overallHealth([{ name: 'x', h: { status: 'Overdue', pct } }, { name: 'y', h: { status: 'Healthy', pct } }])
+      expect(o.score).toBeGreaterThanOrEqual(0); expect(o.score).toBeLessThanOrEqual(100)
+      expect(o.healthy + o.dueSoon + o.overdue).toBe(o.total)
+    }
+  })
+  it('the worst item is the one most used up', () => {
+    expect(overallHealth([it_('a', 88), it_('b', 130), it_('c', 99)]).worst?.name).toBe('b')
+  })
+  it('a better-kept vehicle always scores higher than a worse-kept one', () => {
+    const fresh = overallHealth([it_('a', 10), it_('b', 20), it_('c', 30)]).score!
+    const worn = overallHealth([it_('a', 60), it_('b', 70), it_('c', 80)]).score!
+    const due = overallHealth([it_('a', 90), it_('b', 70), it_('c', 80)]).score!
+    const over = overallHealth([it_('a', 100), it_('b', 70), it_('c', 80)]).score!
+    expect(fresh).toBeGreaterThan(worn); expect(worn).toBeGreaterThan(due); expect(due).toBeGreaterThan(over)
+  })
+  it('real demo data: both vehicles get a finite score, and the label matches the overdue count', () => {
+    const s = buildDemoState('2026-06-01')
+    for (const v of s.vehicles) {
+      const items = s.maint.filter((m) => m.vehicleId === v.id).map((m) => ({ name: m.name, h: maintHealth(m, v, '2026-06-01') }))
+      const o = overallHealth(items)
+      expect(o.total).toBe(7)
+      expect(Number.isFinite(o.score as number)).toBe(true)
+      if (o.overdue === 0 && o.dueSoon === 0) expect(o.level).toBe('excellent')
+      if (o.overdue >= 2) expect(o.level).toBe('poor')
     }
   })
 })

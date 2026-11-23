@@ -88,6 +88,68 @@ export function maintHealth(m: MaintItem, v: Vehicle, today = todayISO()): Healt
   return { status, pct: Math.max(0, Math.min(100, frac * 100)), kmRemaining, daysRemaining, dueDate }
 }
 
+export type OverallLevel = 'excellent' | 'good' | 'fair' | 'poor' | 'none'
+
+export interface OverallHealth {
+  /** 0-100, higher is healthier. Null when there is nothing to judge. */
+  score: number | null
+  level: OverallLevel
+  total: number
+  healthy: number
+  dueSoon: number
+  overdue: number
+  /** The item most in need of attention (highest share of its life used), if any needs it. */
+  worst?: { name: string; status: Status; pct: number }
+}
+
+/**
+ * What one item contributes to the vehicle's score. Built from the item's STATUS, the same thing its badge shows, so
+ * the score always agrees with the cards beneath it:
+ *  - healthy: 100 down to ~70 as it wears (a part at 83% used is fine but not as good as a fresh one);
+ *  - due soon (85-100% used): 60 down to 30;
+ *  - overdue: 0.
+ * Scoring raw "remaining life" instead would make a well-kept vehicle look terrible, because most parts spend most of
+ * their life well used while still being perfectly healthy.
+ */
+export function itemPoints(h: Pick<Health, 'status' | 'pct'>): number {
+  const pct = Number.isFinite(h.pct) ? Math.max(0, Math.min(100, h.pct)) : 0
+  if (h.status === 'Overdue') return 0
+  if (h.status === 'Due Soon') return Math.max(30, 60 - Math.max(0, pct - 85) * 2)
+  return 100 - Math.min(pct, 85) * 0.35
+}
+
+/**
+ * One number for "how is this vehicle doing".
+ *
+ * A plain average hides problems: six fresh items would average out one badly overdue drive belt and call the vehicle
+ * fine. So the total is a blend of the average item score and the WEAKEST item (a quarter): an overdue item visibly
+ * drags the vehicle down instead of being averaged away. The label comes from the item statuses, so any overdue item
+ * keeps the vehicle out of "good" however healthy the rest is.
+ */
+export function overallHealth(items: { name: string; h: Health }[]): OverallHealth {
+  const total = items.length
+  const counts = { healthy: 0, dueSoon: 0, overdue: 0 }
+  for (const { h } of items) {
+    if (h.status === 'Healthy') counts.healthy++
+    else if (h.status === 'Due Soon') counts.dueSoon++
+    else counts.overdue++
+  }
+  if (!total) return { score: null, level: 'none', total, ...counts }
+  const pts = items.map(({ h }) => itemPoints(h))
+  const avg = pts.reduce((x, y) => x + y, 0) / total
+  const min = Math.min(...pts)
+  const score = Math.round(Math.max(0, Math.min(100, avg * 0.75 + min * 0.25)))
+  // The label comes from item STATUSES (which already encode urgency), not from a score threshold, so it does not
+  // jump around with how many items happen to be tracked: any overdue item is at least "fair"; a third or more of
+  // the items overdue, or two-plus overdue, is "poor".
+  const level: OverallLevel =
+    counts.overdue > 0 ? (counts.overdue >= 2 || counts.overdue / total >= 1 / 3 ? 'poor' : 'fair')
+    : counts.dueSoon > 0 ? (counts.dueSoon / total > 0.5 ? 'fair' : 'good')
+    : 'excellent'
+  const needy = items.filter(({ h }) => h.status !== 'Healthy').sort((a, b) => b.h.pct - a.h.pct)[0]
+  return { score, level, total, ...counts, worst: needy ? { name: needy.name, status: needy.h.status, pct: needy.h.pct } : undefined }
+}
+
 export const statusColor: Record<Status, { bar: string; badge: string }> = {
   Healthy: { bar: 'bg-emerald-500', badge: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' },
   'Due Soon': { bar: 'bg-amber-500', badge: 'bg-amber-500/15 text-amber-600 dark:text-amber-400' },
