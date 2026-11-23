@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useRef, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
+
+/**
+ * How many dialogs are open. The page scroll lock belongs to the count, not to any one dialog: if each saved and
+ * restored "the previous overflow" itself, two overlapping dialogs could restore a stale 'hidden' and leave the page
+ * permanently unscrollable.
+ */
+let openDialogs = 0
+function lockScroll() { if (openDialogs++ === 0) document.body.style.overflow = 'hidden' }
+function unlockScroll() { if (--openDialogs <= 0) { openDialogs = 0; document.body.style.overflow = '' } }
 
 /**
  * Sheet on phones (slides up, grabber, rounded top), centred card on larger screens. Every dialog in the app uses it, so
@@ -7,11 +17,14 @@ import { X } from 'lucide-react'
  */
 export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   const panel = useRef<HTMLDivElement>(null)
+  // Callers pass a fresh inline function each render. Keep the latest in a ref so the effect below runs once per dialog,
+  // not on every re-render (which would re-lock, re-focus and fight the user's scrolling).
+  const closeRef = useRef(onClose)
+  useEffect(() => { closeRef.current = onClose })
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && closeRef.current()
     window.addEventListener('keydown', onKey)
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+    lockScroll()
     const before = document.activeElement as HTMLElement | null
     // Move focus into the dialog so keyboard and screen-reader users start inside it, and give it back on close.
     // Focus the panel itself, not the first field: focusing an <input> on a phone pops the on-screen keyboard open the
@@ -19,12 +32,14 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
     panel.current?.focus({ preventScroll: true })
     return () => {
       window.removeEventListener('keydown', onKey)
-      document.body.style.overflow = prev
+      unlockScroll()
       before?.focus?.({ preventScroll: true })
     }
-  }, [onClose])
+  }, [])
 
-  return (
+  // Rendered on <body>, not in place: a parent with backdrop-filter or transform (the translucent header) would otherwise
+  // become the containing block for 'fixed', shrinking the dialog and its scrim to the header's box.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center md:items-center md:p-4">
       <div className="anim-fade absolute inset-0 backdrop-blur-sm" style={{ background: 'var(--scrim)' }} onClick={onClose} />
       <div
@@ -45,7 +60,8 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
         </div>
         <div className="overflow-y-auto overflow-x-hidden px-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-1">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

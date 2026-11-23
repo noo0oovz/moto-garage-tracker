@@ -606,3 +606,17 @@ describe('absurd numbers', () => {
     expect(numVal('1500.50')).toBe(1500.5)
   })
 })
+
+describe('modal placement', () => {
+  it('renders dialogs through a portal on <body>, so a blurred or transformed header cannot shrink them', () => {
+    const src = fs.readFileSync('src/ui.tsx', 'utf8')
+    expect(src).toMatch(/createPortal\(/)
+    expect(src).toMatch(/document\.body,?\s*\)/)
+  })
+
+  it('page scroll lock is a shared counter, not per-dialog save and restore', () => {
+    const src = fs.readFileSync('src/ui.tsx', 'utf8')
+    expect(src).toMatch(/openDialogs/)
+    expect(src).not.toMatch(/const prev = document\.body\.style\.overflow/)
+  })
+})
