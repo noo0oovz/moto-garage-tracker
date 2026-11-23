@@ -94,7 +94,7 @@ export function buildDemoState(today: string): AppState {
   const moto: Vehicle = {
     id: uid(), type: 'motorcycle', nickname: 'Daily Commuter Motorcycle', make: 'Honda', model: 'Click 160', year: 2022,
     plate: '123 ABC', odometer: 18200, avgDailyKm: 25, codingDay: 'Exempt', fuelType: 'Gasoline',
-    transmission: 'cvt', engineCc: 160, driving: { heavyTraffic: true, shortTrips: false, dusty: false, towing: false },
+    transmission: 'cvt', bikeType: 'scooter', engineCc: 160, driving: { heavyTraffic: true, shortTrips: false, dusty: false, towing: false },
   }
 
   const mk = (v: Vehicle, tpl: Tpl, lastKm: number, monthsAgo: number, extraDays = 0): MaintItem => ({

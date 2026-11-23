@@ -314,3 +314,46 @@ export function csvEscape(v: unknown) {
   if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s)) s = `'${s}`
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
+
+/** One limit of an interval (distance or time), ready to show: the words, and whether it has already been passed. */
+export interface Limit { label: string; over: boolean; known: boolean }
+
+const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`
+
+/** "about 3 months" for long spans, otherwise days. Never says "NaN" or a negative number. */
+export function spanLabel(days: number): string {
+  const d = Math.abs(Math.round(days))
+  if (d >= 60) return `about ${plural(Math.round(d / 30), 'month')}`
+  if (d >= 14) return `about ${plural(Math.round(d / 7), 'week')}`
+  return plural(d, 'day')
+}
+
+/**
+ * The two limits of an interval as plain words: how far (km) and how long (time) are left, or how far past they are.
+ * Either is `known: false` when the item has no such limit, so the screen can leave it out instead of printing a dash.
+ */
+export function limits(h: Pick<Health, 'kmRemaining' | 'daysRemaining'>): { km: Limit; time: Limit } {
+  const km: Limit = h.kmRemaining === undefined || !Number.isFinite(h.kmRemaining)
+    ? { label: '', over: false, known: false }
+    : h.kmRemaining < 0 ? { label: `${num(-h.kmRemaining)} km over`, over: true, known: true } : { label: `${num(h.kmRemaining)} km left`, over: false, known: true }
+  const time: Limit = h.daysRemaining === undefined || !Number.isFinite(h.daysRemaining)
+    ? { label: '', over: false, known: false }
+    : h.daysRemaining < 0 ? { label: `${spanLabel(h.daysRemaining)} over`, over: true, known: true } : { label: `${spanLabel(h.daysRemaining)} left`, over: false, known: true }
+  return { km, time }
+}
+
+/**
+ * Which limit to headline for an item: the one that runs out first. Distance is turned into days using the vehicle's
+ * daily distance, so the two can be compared fairly; with no daily figure, distance is preferred when both exist.
+ */
+export function headlineLimit(m: Pick<MaintItem, 'intervalKm' | 'intervalMonths' | 'lastServiceDate'>, h: Pick<Health, 'kmRemaining' | 'daysRemaining' | 'dueDate'>, avgDailyKm: number, today = todayISO()): 'km' | 'time' | 'none' {
+  const hasKm = h.kmRemaining !== undefined && Number.isFinite(h.kmRemaining)
+  const hasTime = !!m.intervalMonths && !!h.dueDate && Number.isFinite(daysBetween(today, h.dueDate))
+  if (hasKm && !hasTime) return 'km'
+  if (hasTime && !hasKm) return 'time'
+  if (!hasKm && !hasTime) return 'none'
+  const kmDays = avgDailyKm > 0 ? (h.kmRemaining as number) / avgDailyKm : Infinity
+  const timeDays = daysBetween(today, h.dueDate as string)
+  if (!Number.isFinite(kmDays)) return 'km'
+  return kmDays <= timeDays ? 'km' : 'time'
+}

@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import { Check, Fuel, Gauge, Pencil, Plus, RotateCcw, Trash2, Wallet, Wrench, TrendingUp } from "lucide-react"
-import { VehicleIcon } from "./VehicleIcon"
+import { artKind, VehicleArt } from "./VehicleArt"
+import { subtitle } from "./VehicleHero"
 import { useStore } from './store'
-import { Empty, Progress } from './ui'
+import { Empty, Pill, Progress } from './ui'
 import type { ModalState } from './modals'
-import { buildLedger, fmtDate, loggedKmSpan, num, peso, spendSummary } from "./logic"
+import { buildLedger, fmtDate, loggedKmSpan, maintHealth, num, overallHealth, peso, spendSummary } from "./logic"
 import { CHECKLIST_CAR, CHECKLIST_MOTO } from './data'
 import { useMinWidth } from './useLayout'
 
@@ -215,19 +216,29 @@ export function VehiclesPage({ open }: { open: Open }) {
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {state.vehicles.map((v) => {
           const active = v.id === state.activeVehicleId
+          const items = state.maint.filter((m) => m.vehicleId === v.id)
+          const health = overallHealth(items.map((m) => ({ name: m.name, h: maintHealth(m, v), unknown: m.unknownLast })))
+          const tone = health.level === 'excellent' || health.level === 'good' ? 'ok' : health.level === 'fair' ? 'soon' : health.level === 'poor' ? 'over' : 'check'
+          const healthText = health.score === null ? (items.length ? 'To check' : 'No items yet') : `Health ${health.score}`
+          const coding = v.type === 'motorcycle' ? 'No number coding' : v.codingDay === 'Exempt' ? 'Coding: exempt' : `Coding: ${v.codingDay}`
           return (
-            <article key={v.id} className={`card p-4 ${active ? 'ring-2 ring-orange-500' : ''}`}>
-              <div className="flex items-start gap-3">
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-orange-500/15 text-orange-500"><VehicleIcon v={v} size={22} /></span>
-                <div className="min-w-0 flex-1">
-                  <h3 className="break-words font-bold">{v.nickname}</h3>
-                  <p className="break-words text-xs text-slate-500">{v.year} {v.make} {v.model} · {v.plate || 'No plate'}</p>
+            <article key={v.id} className="card flex flex-col overflow-hidden" style={active ? { borderColor: 'var(--brand)', boxShadow: '0 0 0 1px var(--brand)' } : undefined} aria-current={active ? 'true' : undefined}>
+              <div className="flex-1 px-4 pt-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h3 className="break-words text-[17px] font-semibold leading-snug">{v.nickname}</h3>
+                    <p className="num break-words text-[13px]" style={{ color: 'var(--text-2)' }}>{subtitle(v)}</p>
+                  </div>
+                  <Pill tone={tone}>{healthText}</Pill>
                 </div>
+                <div className="mx-auto mt-2 max-w-[220px]" style={{ color: 'var(--brand)' }}>
+                  <VehicleArt kind={artKind(v)} className="block h-auto w-full" style={{ ['--art-cut' as string]: 'var(--surface)' }} />
+                </div>
+                <p className="num mt-2 text-[13px]" style={{ color: 'var(--text-2)' }}>
+                  {num(v.odometer)} km · {v.fuelType} · ~{v.avgDailyKm} km/day · {coding}
+                </p>
               </div>
-              <p className="mt-3 text-xs text-slate-500">
-                {num(v.odometer)} km · {v.fuelType} · ~{v.avgDailyKm} km/day · Coding: {v.codingDay}
-              </p>
-              <div className="mt-3 flex gap-2">
+              <div className="mt-3 flex gap-2 px-4 pb-4">
                 <button className="btn-ghost flex-1" disabled={active} onClick={() => setActive(v.id)}>{active ? 'Active' : 'Switch'}</button>
                 <button className="btn-ghost w-11 !px-0" aria-label="Edit" onClick={() => open({ kind: 'vehicle', item: v })}><Pencil size={16} /></button>
                 <button className="btn-ghost w-11 !px-0" aria-label={`Set up maintenance for ${v.nickname}`} title="Set up maintenance" onClick={() => open({ kind: 'setup', vehicleId: v.id })}><Wrench size={16} /></button>
