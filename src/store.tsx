@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { AppState, Expense, FuelLog, MaintItem, PartRecord, ServiceRecord, Vehicle } from './types'
-import { STORAGE_KEY, buildDemoState, buildMaintenance } from './data'
+import { STORAGE_KEY, buildDemoState } from './data'
 import { latestService, syncLinkedExpense, todayISO, uid } from './logic'
 import { migrate } from './migrate'
 
@@ -31,6 +31,7 @@ interface Store {
   saveVehicle: (v: Omit<Vehicle, 'id'> & { id?: string }) => void
   deleteVehicle: (id: string) => void
   saveMaint: (m: Omit<MaintItem, 'id'> & { id?: string }) => void
+  addMaintItems: (items: Omit<MaintItem, 'id'>[]) => void
   deleteMaint: (id: string) => void
   markServiced: (id: string, p: ServicePayload) => void
   deleteService: (id: string) => void
@@ -89,16 +90,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setActive: (id) => setState((s) => ({ ...s, activeVehicleId: id })),
     toggleTheme: () => setState((s) => ({ ...s, theme: s.theme === 'dark' ? 'light' : 'dark' })),
     saveVehicle: (v) => setState((s) => {
-      if (v.id) return { ...s, vehicles: s.vehicles.map((x) => (x.id === v.id ? ({ ...v, id: v.id } as Vehicle) : x)) }
-      const id = uid()
-      const nv: Vehicle = { ...v, id }
-      return {
-        ...s,
-        vehicles: [...s.vehicles, nv],
-        maint: [...s.maint, ...buildMaintenance(id, nv.type, nv.odometer, todayISO())],
-        activeVehicleId: id,
-      }
+      // An id that already exists is an edit. A new vehicle may arrive with a pre-made id (so the setup dialog can open
+      // for it straight away) or without one; either way it is added, becomes the active vehicle, and gets NO
+      // maintenance items here: the setup dialog creates them from the owner's answers instead of guessing "just serviced".
+      if (v.id && s.vehicles.some((x) => x.id === v.id)) return { ...s, vehicles: s.vehicles.map((x) => (x.id === v.id ? ({ ...v, id: v.id } as Vehicle) : x)) }
+      const nv: Vehicle = { ...v, id: v.id || uid() }
+      return { ...s, vehicles: [...s.vehicles, nv], activeVehicleId: nv.id }
     }),
+    addMaintItems: (items) => setState((s) => ({ ...s, maint: [...s.maint, ...items.map((m) => ({ ...m, id: uid() }))] })),
     deleteVehicle: (id) => setState((s) => {
       const vehicles = s.vehicles.filter((v) => v.id !== id)
       return {

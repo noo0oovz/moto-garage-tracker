@@ -3,9 +3,10 @@ import { Modal, Field, Toggle, numVal, useOnce } from './ui'
 import { useStore } from './store'
 import { CODING_DAYS, FUEL_TYPES, PART_TYPES } from './data'
 import { EXPENSE_CATEGORIES, PART_CONDITIONS, type CodingDay, type Expense, type ExpenseCategory, type FuelLog, type FuelType, type MaintItem, type PartCondition, type PartRecord, type ServiceRecord, type Vehicle, type VehicleType } from './types'
-import { peso, todayISO } from './logic'
+import { peso, todayISO, uid } from './logic'
 import { MONTH_NAMES, codingDayFor, codingIsAuto, nextRenewal } from './plate'
 import { useFuelData } from './useFuelData'
+import { SetupMaintenanceModal } from './SetupMaintenance'
 import { brandsFor, isProduct, productsFor, type FwProduct } from './pricing'
 
 export type ModalState =
@@ -13,18 +14,20 @@ export type ModalState =
   | { kind: 'service'; item: MaintItem }
   | { kind: 'maint'; item?: MaintItem }
   | { kind: 'vehicle'; item?: Vehicle }
+  | { kind: 'setup'; vehicleId: string }
   | { kind: 'part'; item?: PartRecord }
   | { kind: 'editService'; item: ServiceRecord }
   | null
 
-export function Modals({ modal, close }: { modal: ModalState; close: () => void }) {
+export function Modals({ modal, close, openModal }: { modal: ModalState; close: () => void; openModal: (m: ModalState) => void }) {
   if (!modal) return null
+  if (modal.kind === 'setup') return <SetupMaintenanceModal vehicleId={modal.vehicleId} close={close} />
   if (modal.kind === 'part') return <PartModal item={modal.item} close={close} />
   if (modal.kind === 'editService') return <EditServiceModal item={modal.item} close={close} />
   if (modal.kind === 'log') return <LogModal initial={modal.tab} editFuel={modal.editFuel} editExpense={modal.editExpense} close={close} />
   if (modal.kind === 'service') return <ServiceModal item={modal.item} close={close} />
   if (modal.kind === 'maint') return <MaintModal item={modal.item} close={close} />
-  return <VehicleModal item={modal.item} close={close} />
+  return <VehicleModal item={modal.item} close={close} openModal={openModal} />
 }
 
 function LogModal({ initial, editFuel, editExpense, close }: { initial: 'fuel' | 'expense'; editFuel?: FuelLog; editExpense?: Expense; close: () => void }) {
@@ -278,8 +281,10 @@ function MaintModal({ item, close }: { item?: MaintItem; close: () => void }) {
   )
 }
 
-function VehicleModal({ item, close }: { item?: Vehicle; close: () => void }) {
+function VehicleModal({ item, close, openModal }: { item?: Vehicle; close: () => void; openModal: (m: ModalState) => void }) {
   const { saveVehicle } = useStore()
+  // A new vehicle gets its id here, so the setup dialog can open for it the moment it is saved.
+  const [newId] = useState(() => item?.id ?? uid())
   const [type, setType] = useState<VehicleType>(item?.type ?? 'car')
   const [nickname, setNickname] = useState(item?.nickname ?? '')
   const [make, setMake] = useState(item?.make ?? '')
@@ -319,13 +324,13 @@ function VehicleModal({ item, close }: { item?: Vehicle; close: () => void }) {
           e.preventDefault()
           if (!claim()) return
           saveVehicle({
-            id: item?.id, type, nickname: nickname.trim() || `${make} ${model}`.trim() || 'My Vehicle', make, model,
+            id: newId, type, nickname: nickname.trim() || `${make} ${model}`.trim() || 'My Vehicle', make, model,
             year: numVal(year), plate, odometer: numVal(odo), avgDailyKm: numVal(daily), codingDay: shownCoding, fuelType: fuel,
             preferredFuel: prefBrand && isProduct(prefProduct) && grades.includes(prefProduct) ? { brand: prefBrand, product: prefProduct } : undefined,
             // Keep only a mark that still matches this plate's current deadline.
             registeredFor: renewal?.registered ? registeredFor : undefined,
           })
-          close()
+          if (item) close(); else openModal({ kind: 'setup', vehicleId: newId })
         }}
       >
         {!item && (

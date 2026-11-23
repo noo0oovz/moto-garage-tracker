@@ -146,7 +146,7 @@ describe('shipped public/fuel-prices.json', () => {
     for (const [name, prov] of expect_) if (where.has(name)) expect({ name, province: where.get(name) }).toEqual({ name, province: prov })
   })
   it('has no truncated multi-line province names', () => {
-    const bad = (d?.regions ?? []).flatMap((r) => r.areas).filter((a) => /^(oriental|occidental|norte|sur|del|de)$/i.test(a.province) || /(del|de)$/i.test(a.province))
+    const bad = (d?.regions ?? []).flatMap((r) => r.areas).filter((a) => /^(oriental|occidental|norte|sur|del|de)$/i.test(a.province) || /\b(del|de)$/i.test(a.province))
     expect(bad.map((a) => `${a.province}/${a.name}`)).toEqual([])
   })
   it('has adjustments with sane values', () => {

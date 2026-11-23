@@ -188,7 +188,7 @@ export default function App() {
         </nav>
       )}
 
-      <Modals modal={modal} close={close} />
+      <Modals modal={modal} close={close} openModal={setModal} />
     </div>
   )
 }

@@ -3,6 +3,7 @@ import { EXPENSE_CATEGORIES, PART_CONDITIONS } from './types'
 import { SCHEMA_VERSION } from './data'
 import { isISODate } from './logic'
 import { isProduct } from './pricing'
+import { GUIDE } from './intervals'
 
 const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x)
 const str = (x: unknown, d = '') => (typeof x === 'string' ? x : typeof x === 'number' && Number.isFinite(x) ? String(x) : d)
@@ -15,6 +16,7 @@ const opt = (x: unknown) => { const n = nz(x, NaN); return Number.isFinite(n) ? 
 const date = (x: unknown, d: string) => (isISODate(x) ? x : d)
 const oneOf = <T extends string>(x: unknown, list: readonly T[], d: T): T => (typeof x === 'string' && (list as readonly string[]).includes(x) ? (x as T) : d)
 
+const TRANSMISSIONS = ['manual', 'automatic', 'cvt', 'dct'] as const
 const CODING = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Exempt'] as const
 const FUELS = ['Diesel', 'Gasoline', 'Hybrid', 'EV'] as const
 
@@ -48,6 +50,13 @@ export function migrate(raw: unknown, now = new Date(), today = now.toISOString(
       preferredFuel: isObj(v.preferredFuel) && typeof v.preferredFuel.brand === 'string' && v.preferredFuel.brand && isProduct(v.preferredFuel.product)
         ? { brand: v.preferredFuel.brand, product: v.preferredFuel.product } : undefined,
       registeredFor: isISODate(v.registeredFor) ? v.registeredFor : undefined,
+      transmission: typeof v.transmission === 'string' && (TRANSMISSIONS as readonly string[]).includes(v.transmission) ? (v.transmission as (typeof TRANSMISSIONS)[number]) : undefined,
+      // Engine size: a believable number of cc only (a typo like 1e9 must not pick a class by accident).
+      engineCc: opt(v.engineCc) && (opt(v.engineCc) as number) >= 20 && (opt(v.engineCc) as number) <= 3000 ? Math.round(opt(v.engineCc) as number) : undefined,
+      driving: isObj(v.driving) ? {
+        heavyTraffic: v.driving.heavyTraffic === true, shortTrips: v.driving.shortTrips === true,
+        dusty: v.driving.dusty === true, towing: v.driving.towing === true,
+      } : undefined,
     })),
   )
   const ids = new Set(vehicles.map((v) => v.id))
@@ -58,6 +67,9 @@ export function migrate(raw: unknown, now = new Date(), today = now.toISOString(
     intervalKm: opt(m.intervalKm) && (opt(m.intervalKm) as number) > 0 ? opt(m.intervalKm) : undefined,
     intervalMonths: opt(m.intervalMonths) && (opt(m.intervalMonths) as number) > 0 ? opt(m.intervalMonths) : undefined,
     lastServiceKm: Math.max(0, nz(m.lastServiceKm)), lastServiceDate: date(m.lastServiceDate, today),
+    source: oneOf(m.source, ['general', 'booklet', 'custom'] as const, 'custom'),
+    unknownLast: m.unknownLast === true ? true : undefined,
+    guideKey: typeof m.guideKey === 'string' && m.guideKey in GUIDE ? m.guideKey : undefined,
   })))
   const fuel: FuelLog[] = uniqueById(rows<FuelLog>(s.fuel).map((f) => ({
     id: str(f.id), vehicleId: String(f.vehicleId), date: date(f.date, today), liters: Math.max(0, nz(f.liters)),

@@ -21,6 +21,20 @@ export interface Vehicle {
    * boolean, is what makes the tick expire by itself: next year's deadline is a different date, so it stops matching.
    */
   registeredFor?: string
+  /** Manual, automatic, CVT or dual-clutch: changes which transmission fluid and how often. Cars (and some bikes). */
+  transmission?: Transmission
+  /** Engine size in cc (motorcycles): picks the maintenance class, from small scooters up to big bikes. */
+  engineCc?: number
+  /** How the vehicle is driven. "Severe use" shortens several intervals. */
+  driving?: DrivingConditions
+}
+
+export type Transmission = 'manual' | 'automatic' | 'cvt' | 'dct'
+export interface DrivingConditions {
+  heavyTraffic?: boolean
+  shortTrips?: boolean
+  dusty?: boolean
+  towing?: boolean
 }
 
 export interface MaintItem {
@@ -31,6 +45,12 @@ export interface MaintItem {
   intervalMonths?: number
   lastServiceKm: number
   lastServiceDate: string // YYYY-MM-DD
+  /** Where the interval came from. 'booklet' means the owner copied it from her casa booklet and it is never overwritten. */
+  source?: 'general' | 'booklet' | 'custom'
+  /** The owner did not know when this was last done, so the dates are placeholders and the item is treated as due. */
+  unknownLast?: boolean
+  /** Key into the interval guide (src/intervals.ts), so the plain-language "why" can be shown for this item. */
+  guideKey?: string
 }
 
 export interface FuelLog {

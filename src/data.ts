@@ -1,4 +1,4 @@
-import type { AppState, FuelLog, Expense, MaintItem, PartRecord, ServiceRecord, Vehicle, VehicleType, CodingDay, FuelType } from './types'
+import type { AppState, FuelLog, Expense, MaintItem, PartRecord, ServiceRecord, Vehicle, CodingDay, FuelType } from './types'
 import { addDays, addMonths, uid } from './logic'
 
 export const SCHEMA_VERSION = 2
@@ -35,18 +35,6 @@ export const MOTO_TEMPLATE: Tpl[] = [
   { name: 'Tires & Valve Clearance Check', km: 12000, mo: 12 },
 ]
 
-export function buildMaintenance(vehicleId: string, type: VehicleType, odometer: number, date: string): MaintItem[] {
-  return (type === 'car' ? CAR_TEMPLATE : MOTO_TEMPLATE).map((t) => ({
-    id: uid(),
-    vehicleId,
-    name: t.name,
-    intervalKm: t.km,
-    intervalMonths: t.mo,
-    lastServiceKm: odometer,
-    lastServiceDate: date,
-  }))
-}
-
 export const CHECKLIST_CAR = [
   { key: 'battery', label: 'Battery', hint: 'Terminals clean & tight, no corrosion' },
   { key: 'lights', label: 'Lights', hint: 'Headlights, brake, signals, hazards' },
@@ -81,15 +69,17 @@ export function buildDemoState(today: string): AppState {
   const hilux: Vehicle = {
     id: uid(), type: 'car', nickname: '2018 Toyota Hilux G 4x2', make: 'Toyota', model: 'Hilux G 4x2', year: 2018,
     plate: 'NBC 1235', odometer: 78400, avgDailyKm: 35, codingDay: 'Wednesday', fuelType: 'Diesel',
+    transmission: 'automatic', driving: { heavyTraffic: true, shortTrips: false, dusty: false, towing: false },
   }
   const moto: Vehicle = {
     id: uid(), type: 'motorcycle', nickname: 'Daily Commuter Motorcycle', make: 'Honda', model: 'Click 160', year: 2022,
     plate: '123 ABC', odometer: 18200, avgDailyKm: 25, codingDay: 'Exempt', fuelType: 'Gasoline',
+    transmission: 'cvt', engineCc: 160, driving: { heavyTraffic: true, shortTrips: false, dusty: false, towing: false },
   }
 
   const mk = (v: Vehicle, tpl: Tpl, lastKm: number, monthsAgo: number, extraDays = 0): MaintItem => ({
     id: uid(), vehicleId: v.id, name: tpl.name, intervalKm: tpl.km, intervalMonths: tpl.mo, lastServiceKm: lastKm,
-    lastServiceDate: addDays(addMonths(today, -monthsAgo), -extraDays),
+    lastServiceDate: addDays(addMonths(today, -monthsAgo), -extraDays), source: 'custom',
   })
 
   const maint: MaintItem[] = [

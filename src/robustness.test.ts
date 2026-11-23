@@ -448,3 +448,93 @@ describe('overallHealth', () => {
     }
   })
 })
+
+describe('maintenance guidance fields survive import and are validated', () => {
+  const base = () => JSON.parse(JSON.stringify(buildDemoState('2026-06-01')))
+  it('keeps valid transmission, engine size, driving conditions and item metadata', () => {
+    const s = base()
+    Object.assign(s.vehicles[1], { transmission: 'cvt', engineCc: 155, driving: { heavyTraffic: true, dusty: false } })
+    Object.assign(s.maint.find((m: { vehicleId: string }) => m.vehicleId === s.vehicles[1].id), { source: 'booklet', unknownLast: true, guideKey: 'engine-oil' })
+    const r = migrate(s)!
+    expect(r.vehicles[1]).toMatchObject({ transmission: 'cvt', engineCc: 155, driving: { heavyTraffic: true, dusty: false, shortTrips: false, towing: false } })
+    const m = r.maint.find((x) => x.vehicleId === s.vehicles[1].id)!
+    expect(m).toMatchObject({ source: 'booklet', unknownLast: true, guideKey: 'engine-oil' })
+  })
+  it('drops nonsense without rejecting the backup', () => {
+    const s = base()
+    Object.assign(s.vehicles[0], { transmission: 'warp-drive', engineCc: 1e9, driving: 'lots' })
+    Object.assign(s.maint[0], { source: 'magic', unknownLast: 'yes', guideKey: 'not-a-real-key' })
+    const r = migrate(s)!
+    expect(r.vehicles[0].transmission).toBeUndefined()
+    expect(r.vehicles[0].engineCc).toBeUndefined()
+    expect(r.vehicles[0].driving).toBeUndefined()
+    expect(r.maint[0].source).toBe('custom')
+    expect(r.maint[0].unknownLast).toBeUndefined()
+    expect(r.maint[0].guideKey).toBeUndefined()
+  })
+  it('an engine size outside 20-3000cc is rejected, one inside is rounded', () => {
+    for (const [cc, want] of [[10, undefined], [3001, undefined], [-125, undefined], [125.4, 125], [155, 155], [1000, 1000], ['150', 150]] as const) {
+      const s = base(); s.vehicles[0].engineCc = cc
+      expect(migrate(s)!.vehicles[0].engineCc, String(cc)).toBe(want)
+    }
+  })
+  it('old backups without any of these fields still import, and their items become custom (never overwritten)', () => {
+    const s = base()
+    for (const m of s.maint) { delete m.source; delete m.unknownLast; delete m.guideKey }
+    for (const v of s.vehicles) { delete v.transmission; delete v.engineCc; delete v.driving }
+    const r = migrate(s)!
+    expect(r.maint.every((m) => m.source === 'custom')).toBe(true)
+    expect(r.vehicles.every((v) => v.transmission === undefined && v.driving === undefined)).toBe(true)
+  })
+})
+
+describe('overallHealth and unknown last-service items', () => {
+  const od = (name: string) => ({ name, h: { status: 'Overdue' as const, pct: 100 } })
+  const ok = (name: string, pct = 10) => ({ name, h: { status: 'Healthy' as const, pct } })
+  const unk = (name: string) => ({ name, h: { status: 'Overdue' as const, pct: 100 }, unknown: true })
+
+  it('counts items whose last service is unknown, and does not count them as overdue', () => {
+    const o = overallHealth([unk('a'), unk('b'), ok('c'), od('d')])
+    expect(o).toMatchObject({ unknown: 2, healthy: 1, overdue: 1, total: 4 })
+    expect(overallHealth([ok('a'), ok('b')]).unknown).toBe(0)
+    expect(overallHealth([]).unknown).toBe(0)
+  })
+  it('a vehicle where nothing is known has no score and is "unchecked", never excellent and never a failing grade', () => {
+    const o = overallHealth([unk('a'), unk('b'), unk('c')])
+    expect(o).toMatchObject({ score: null, level: 'unchecked', overdue: 0, healthy: 0, unknown: 3 })
+  })
+  it('unknown items are left out of the score, so they do not drag it down', () => {
+    const known = [ok('a', 10), ok('b', 20)]
+    expect(overallHealth([...known, unk('x'), unk('y'), unk('z')]).score).toBe(overallHealth(known).score)
+  })
+  it('but they cap the label: a vehicle with unknowns can be at best "good", never "excellent"', () => {
+    expect(overallHealth([ok('a'), ok('b')]).level).toBe('excellent')
+    expect(overallHealth([ok('a'), ok('b'), unk('c')]).level).toBe('good')
+    expect(overallHealth([ok('a'), ok('b'), unk('c')]).level).not.toBe('excellent')
+  })
+  it('real overdue items among known ones still lower the label, unknowns do not hide them', () => {
+    const o = overallHealth([od('belt'), ok('a'), ok('b'), ok('c'), unk('x'), unk('y')])
+    expect(o.overdue).toBe(1); expect(o.level).toBe('fair'); expect(o.worst?.name).toBe('belt')
+  })
+  it('the most-overdue pointer ignores unknown items (their dates are placeholders)', () => {
+    expect(overallHealth([ok('a'), unk('placeholder')]).worst).toBeUndefined()
+  })
+})
+
+describe('overallHealth does not overreact when little is known', () => {
+  const od = (name: string) => ({ name, h: { status: 'Overdue' as const, pct: 100 } })
+  const ok = (name: string) => ({ name, h: { status: 'Healthy' as const, pct: 10 } })
+  const unk = (name: string) => ({ name, h: { status: 'Overdue' as const, pct: 100 }, unknown: true })
+  it('one overdue among two known items, with 13 unknown, is "needs attention", not "needs service"', () => {
+    const o = overallHealth([ok('a'), od('b'), ...Array.from({ length: 13 }, (_, i) => unk('u' + i))])
+    expect(o.level).toBe('fair')
+    expect(o).toMatchObject({ overdue: 1, healthy: 1, unknown: 13 })
+  })
+  it('once enough is known, the same ratio is judged as poor', () => {
+    expect(overallHealth([od('a'), od('b'), ok('c'), ok('d'), ok('e')]).level).toBe('poor') // 2 of 5 known overdue
+    expect(overallHealth([od('a'), ok('b'), ok('c'), ok('d')]).level).toBe('fair') // 1 of 4
+  })
+  it('a vehicle with every item known and several overdue is still poor', () => {
+    expect(overallHealth([od('a'), od('b'), od('c')]).level).toBe('poor')
+  })
+})

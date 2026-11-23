@@ -14,6 +14,7 @@ import {
 import { CHECKLIST_CAR, CHECKLIST_MOTO } from './data'
 import { useMinWidth } from './useLayout'
 import { MONTH_NAMES, nextRenewal, reminderLevel } from './plate'
+import { GUIDE, type GuideKey } from './intervals'
 
 type Open = (m: ModalState) => void
 
@@ -59,6 +60,7 @@ const LEVEL_STYLE: Record<OverallLevel, { label: string; ring: string; text: str
   good: { label: 'Good', ring: 'stroke-emerald-500', text: 'text-emerald-600 dark:text-emerald-400', blurb: 'In good shape, with something coming up soon.' },
   fair: { label: 'Needs attention', ring: 'stroke-amber-500', text: 'text-amber-600 dark:text-amber-400', blurb: 'Some items need servicing.' },
   poor: { label: 'Needs service', ring: 'stroke-red-500', text: 'text-red-600 dark:text-red-400', blurb: 'Several items are overdue. Service soon.' },
+  unchecked: { label: "Let's check it", ring: 'stroke-slate-400', text: 'text-slate-700 dark:text-slate-200', blurb: 'We do not know when things were last done yet. Tell us what you remember and we will work out what is due.' },
   none: { label: 'No data', ring: 'stroke-slate-400', text: 'text-slate-500', blurb: 'Add maintenance items to track this vehicle.' },
 }
 
@@ -92,10 +94,16 @@ export function OverallHealthCard({ o, vehicleName }: { o: OverallHealth; vehicl
         <p className="text-sm text-slate-600 dark:text-slate-300">{st.blurb}</p>
         {o.total > 0 && (
           <ul className="mt-2 flex flex-wrap justify-center gap-1.5 text-xs font-semibold sm:justify-start" aria-label="Items by status">
-            <li className={`rounded-full px-2.5 py-1 ${statusColor.Healthy.badge}`}>{o.healthy} healthy</li>
+            {o.healthy > 0 && <li className={`rounded-full px-2.5 py-1 ${statusColor.Healthy.badge}`}>{o.healthy} healthy</li>}
             {o.dueSoon > 0 && <li className={`rounded-full px-2.5 py-1 ${statusColor['Due Soon'].badge}`}>{o.dueSoon} due soon</li>}
             {o.overdue > 0 && <li className={`rounded-full px-2.5 py-1 ${statusColor.Overdue.badge}`}>{o.overdue} overdue</li>}
+            {o.unknown > 0 && <li className="rounded-full bg-slate-500/15 px-2.5 py-1 text-slate-600 dark:text-slate-300">{o.unknown} to check</li>}
           </ul>
+        )}
+        {o.unknown > 0 && (
+          <p className="mt-2 rounded-lg bg-slate-100 p-2 text-xs text-slate-600 dark:bg-white/5 dark:text-slate-300">
+            {o.unknown === o.total ? 'You have not told us when anything was last done. Tap an item and mark it serviced, or set its date, and the score appears.' : `${o.unknown} of ${o.total} items still need a date, so they are left out of the score for now. Confirm them and the score gets more accurate.`}
+          </p>
         )}
         {o.worst && (
           <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
@@ -170,7 +178,7 @@ export function GaragePage({ open, go }: { open: Open; go: (p: Page) => void }) 
     const items = state.maint.filter((m) => m.vehicleId === vehicle.id)
       .map((m) => ({ m, h: maintHealth(m, vehicle) }))
       .sort((a, b) => b.h.pct - a.h.pct)
-    return { eff, sum, items, overall: overallHealth(items.map(({ m, h }) => ({ name: m.name, h }))) }
+    return { eff, sum, items, overall: overallHealth(items.map(({ m, h }) => ({ name: m.name, h, unknown: m.unknownLast }))) }
   }, [state, vehicle])
 
   if (!vehicle || !data) return <Empty>No vehicles yet. Add one from More → Vehicles.</Empty>
@@ -200,15 +208,28 @@ export function GaragePage({ open, go }: { open: Open; go: (p: Page) => void }) 
           <button className="btn-ghost !min-h-11" onClick={() => open({ kind: 'maint' })}><Plus size={16} /> Add item</button>
         </div>
         <OverallHealthCard o={data.overall} vehicleName={vehicle.nickname} />
-        {data.items.length === 0 ? <Empty>No maintenance items yet.</Empty> : (
+        {data.items.length === 0 ? (
+          <Empty>
+            Nothing is being tracked for this vehicle yet.
+            <div className="mt-3"><button className="btn-primary" onClick={() => open({ kind: 'setup', vehicleId: vehicle.id })}><Wrench size={16} /> Set up maintenance</button></div>
+          </Empty>
+        ) : (
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
             {data.items.map(({ m, h }) => (
               <article key={m.id} className="card flex flex-col gap-3 p-4">
                 <div className="flex items-start justify-between gap-2">
                   <h3 className="min-w-0 text-sm font-bold leading-snug">{m.name}</h3>
-                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${statusColor[h.status].badge}`}>{h.status}</span>
+                  {m.unknownLast
+                    ? <span className="shrink-0 rounded-full bg-slate-500/15 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:text-slate-300">Check</span>
+                    : <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${statusColor[h.status].badge}`}>{h.status}</span>}
                 </div>
-                <Progress pct={h.pct} className={statusColor[h.status].bar} />
+                {!m.unknownLast && <Progress pct={h.pct} className={statusColor[h.status].bar} />}
+                {m.unknownLast ? (
+                  // The dates for this item are placeholders (the owner did not know), so no invented "km over / days over".
+                  <p className="rounded-xl bg-amber-500/10 p-2.5 text-xs text-amber-700 dark:text-amber-300">
+                    <b>Last service unknown.</b> Worth checking. When was it last done? Tap <b>Mark Serviced</b> once it is done, or set the date if you remember.
+                  </p>
+                ) : (
                 <dl className="grid grid-cols-2 gap-2 text-xs">
                   <div>
                     <dt className="text-slate-500 dark:text-slate-400">Km remaining</dt>
@@ -223,10 +244,19 @@ export function GaragePage({ open, go }: { open: Open; go: (p: Page) => void }) 
                     </dd>
                   </div>
                 </dl>
+                )}
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   Every {[m.intervalKm && `${num(m.intervalKm)} km`, m.intervalMonths && `${m.intervalMonths} mo`].filter(Boolean).join(' / ')}
-                  {' · last '}{num(m.lastServiceKm)} km, {fmtDate(m.lastServiceDate)}
+                  {m.source === 'booklet' ? ' · from your booklet' : m.source === 'general' ? ' · general guidance' : ''}
+                  {m.unknownLast ? '' : <>{' · last '}{num(m.lastServiceKm)} km, {fmtDate(m.lastServiceDate)}</>}
                 </p>
+                {m.guideKey && GUIDE[m.guideKey as GuideKey] && (
+                  <details className="text-xs text-slate-600 dark:text-slate-300">
+                    <summary className="flex min-h-11 cursor-pointer items-center font-semibold text-orange-500">Why this matters</summary>
+                    <p className="pb-1">{GUIDE[m.guideKey as GuideKey].why}</p>
+                    {m.source === 'general' && <p className="pb-1 text-slate-500 dark:text-slate-400">General guidance, not from your car&rsquo;s manual. If your casa booklet says different, tap the pencil and use its number.</p>}
+                  </details>
+                )}
                 <div className="mt-auto flex gap-2">
                   <button className="btn-primary flex-1" onClick={() => open({ kind: 'service', item: m })}><Check size={16} /> Mark Serviced</button>
                   <button className="btn-ghost w-11 !px-0" aria-label="Edit" onClick={() => open({ kind: 'maint', item: m })}><Pencil size={16} /></button>
@@ -446,6 +476,7 @@ export function VehiclesPage({ open }: { open: Open }) {
               <div className="mt-3 flex gap-2">
                 <button className="btn-ghost flex-1" disabled={active} onClick={() => setActive(v.id)}>{active ? 'Active' : 'Switch'}</button>
                 <button className="btn-ghost w-11 !px-0" aria-label="Edit" onClick={() => open({ kind: 'vehicle', item: v })}><Pencil size={16} /></button>
+                <button className="btn-ghost w-11 !px-0" aria-label={`Set up maintenance for ${v.nickname}`} title="Set up maintenance" onClick={() => open({ kind: 'setup', vehicleId: v.id })}><Wrench size={16} /></button>
                 <button className="btn-danger w-11 !px-0" aria-label="Delete"
                   onClick={() => { if (confirm(`Delete ${v.nickname} and all its logs?`)) deleteVehicle(v.id) }}><Trash2 size={16} /></button>
               </div>

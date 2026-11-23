@@ -88,7 +88,7 @@ export function maintHealth(m: MaintItem, v: Vehicle, today = todayISO()): Healt
   return { status, pct: Math.max(0, Math.min(100, frac * 100)), kmRemaining, daysRemaining, dueDate }
 }
 
-export type OverallLevel = 'excellent' | 'good' | 'fair' | 'poor' | 'none'
+export type OverallLevel = 'excellent' | 'good' | 'fair' | 'poor' | 'unchecked' | 'none'
 
 export interface OverallHealth {
   /** 0-100, higher is healthier. Null when there is nothing to judge. */
@@ -98,6 +98,8 @@ export interface OverallHealth {
   healthy: number
   dueSoon: number
   overdue: number
+  /** Items whose last service the owner does not know. They count as due, but the score should say that is a precaution. */
+  unknown: number
   /** The item most in need of attention (highest share of its life used), if any needs it. */
   worst?: { name: string; status: Status; pct: number }
 }
@@ -126,28 +128,38 @@ export function itemPoints(h: Pick<Health, 'status' | 'pct'>): number {
  * drags the vehicle down instead of being averaged away. The label comes from the item statuses, so any overdue item
  * keeps the vehicle out of "good" however healthy the rest is.
  */
-export function overallHealth(items: { name: string; h: Health }[]): OverallHealth {
+export function overallHealth(items: { name: string; h: Health; unknown?: boolean }[]): OverallHealth {
   const total = items.length
+  // Items whose last service nobody knows cannot be judged. They are NOT counted as overdue (we do not know that), and
+  // they are left out of the score, but they can never look healthy: they cap the label below "excellent" and are
+  // reported separately so the card can say "let's check these" instead of "14 overdue".
+  const known = items.filter((i) => !i.unknown)
+  const unknown = total - known.length
   const counts = { healthy: 0, dueSoon: 0, overdue: 0 }
-  for (const { h } of items) {
+  for (const { h } of known) {
     if (h.status === 'Healthy') counts.healthy++
     else if (h.status === 'Due Soon') counts.dueSoon++
     else counts.overdue++
   }
-  if (!total) return { score: null, level: 'none', total, ...counts }
-  const pts = items.map(({ h }) => itemPoints(h))
-  const avg = pts.reduce((x, y) => x + y, 0) / total
+  if (!total) return { score: null, level: 'none', total, unknown, ...counts }
+  if (!known.length) return { score: null, level: 'unchecked', total, unknown, ...counts }
+  const pts = known.map(({ h }) => itemPoints(h))
+  const avg = pts.reduce((x, y) => x + y, 0) / known.length
   const min = Math.min(...pts)
   const score = Math.round(Math.max(0, Math.min(100, avg * 0.75 + min * 0.25)))
-  // The label comes from item STATUSES (which already encode urgency), not from a score threshold, so it does not
-  // jump around with how many items happen to be tracked: any overdue item is at least "fair"; a third or more of
-  // the items overdue, or two-plus overdue, is "poor".
-  const level: OverallLevel =
-    counts.overdue > 0 ? (counts.overdue >= 2 || counts.overdue / total >= 1 / 3 ? 'poor' : 'fair')
-    : counts.dueSoon > 0 ? (counts.dueSoon / total > 0.5 ? 'fair' : 'good')
+  // The label comes from item STATUSES, not a score threshold. Any overdue item is at least "fair"; a third or more of
+  // the known items overdue, or two-plus overdue, is "poor". Unknown items hold the label at "good" at best.
+  const kn = known.length
+  // "Poor" is a verdict on the whole vehicle, so it needs real evidence. With most items unknown, a single overdue item
+  // among a couple of known ones must not be read as "several overdue / needs service": at worst it needs attention.
+  const enoughToJudge = kn >= 4 || kn >= total * 0.6
+  let level: OverallLevel =
+    counts.overdue > 0 ? (enoughToJudge && (counts.overdue >= 2 || counts.overdue / kn >= 1 / 3) ? 'poor' : 'fair')
+    : counts.dueSoon > 0 ? (counts.dueSoon / kn > 0.5 ? 'fair' : 'good')
     : 'excellent'
-  const needy = items.filter(({ h }) => h.status !== 'Healthy').sort((a, b) => b.h.pct - a.h.pct)[0]
-  return { score, level, total, ...counts, worst: needy ? { name: needy.name, status: needy.h.status, pct: needy.h.pct } : undefined }
+  if (unknown > 0 && level === 'excellent') level = 'good'
+  const needy = known.filter(({ h }) => h.status !== 'Healthy').sort((a, b) => b.h.pct - a.h.pct)[0]
+  return { score, level, total, unknown, ...counts, worst: needy ? { name: needy.name, status: needy.h.status, pct: needy.h.pct } : undefined }
 }
 
 export const statusColor: Record<Status, { bar: string; badge: string }> = {
