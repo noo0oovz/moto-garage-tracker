@@ -620,3 +620,21 @@ describe('modal placement', () => {
     expect(src).not.toMatch(/const prev = document\.body\.style\.overflow/)
   })
 })
+
+describe('servicing clears "never done" and "unknown"', () => {
+  it('import keeps neverDone, but drops it when the item is also unknown', () => {
+    const s = buildDemoState('2026-06-01')
+    s.maint[0] = { ...s.maint[0], neverDone: true }
+    s.maint[1] = { ...s.maint[1], neverDone: true, unknownLast: true }
+    const r = migrate(JSON.parse(JSON.stringify(s)))!
+    expect(r.maint[0].neverDone).toBe(true)
+    expect(r.maint[1].neverDone).toBeUndefined()
+    expect(r.maint[1].unknownLast).toBe(true)
+  })
+
+  it('the store clears both flags when an item is marked serviced or its newest record changes', () => {
+    const src = fs.readFileSync('src/store.tsx', 'utf8')
+    const hits = src.match(/unknownLast: undefined, neverDone: undefined/g) ?? []
+    expect(hits.length).toBeGreaterThanOrEqual(2)
+  })
+})

@@ -75,6 +75,7 @@ export function migrate(raw: unknown, now = new Date(), today = now.toISOString(
     lastServiceKm: Math.max(0, nz(m.lastServiceKm)), lastServiceDate: date(m.lastServiceDate, today),
     source: oneOf(m.source, ['general', 'booklet', 'custom'] as const, 'custom'),
     unknownLast: m.unknownLast === true ? true : undefined,
+    neverDone: m.neverDone === true && m.unknownLast !== true ? true : undefined,
     guideKey: typeof m.guideKey === 'string' && m.guideKey in GUIDE ? m.guideKey : undefined,
   })))
   const fuel: FuelLog[] = uniqueById(rows<FuelLog>(s.fuel).map((f) => ({

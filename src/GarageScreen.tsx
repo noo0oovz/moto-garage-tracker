@@ -209,7 +209,7 @@ export function GaragePage({ open, go }: { open: Open; go: (p: Page) => void }) 
                         <span className="min-w-0 flex-1">
                           <span className="block break-words text-[15px] font-medium leading-snug">{m.name}</span>
                           <span className="block text-[13px] leading-snug" style={{ color: 'var(--text-2)' }}>
-                            Every {interval}{m.unknownLast ? ' · last service unknown' : ''}
+                            Every {interval}{m.unknownLast ? ' · last service unknown' : m.neverDone ? ' · never done yet' : ''}
                           </span>
                         </span>
                         <span className="flex shrink-0 flex-col items-end gap-1">

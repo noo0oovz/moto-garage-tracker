@@ -6,7 +6,7 @@ import { LAST_DONE_LABEL, keysCoveredBy, lastServiceFor, planFor, type LastDone,
 import { todayISO } from './logic'
 import type { BikeType, DrivingConditions, MaintItem, Transmission, Vehicle } from './types'
 
-const ANSWERS: LastDone[] = ['just-done', 'recent', 'old', 'unknown']
+const ANSWERS: LastDone[] = ['just-done', 'recent', 'old', 'never', 'unknown']
 
 const TRANSMISSIONS: { value: Transmission; label: string; hint: string }[] = [
   { value: 'automatic', label: 'Automatic', hint: 'P-R-N-D shifter' },
@@ -208,10 +208,11 @@ export function SetupMaintenanceModal({ vehicleId, close }: { vehicleId: string;
                 {r.on && (
                   <>
                     <p className="mb-1 mt-3 text-xs font-semibold text-slate-500">When was this last done?</p>
-                    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4" role="radiogroup" aria-label={`When was ${r.item.name} last done?`}>
+                    <div className="grid grid-cols-6 gap-1.5" role="radiogroup" aria-label={`When was ${r.item.name} last done?`}>
                       {ANSWERS.map((a) => (
+                        // Three time-based answers on the first row, then the two "no history" answers sharing the second.
                         <button key={a} type="button" role="radio" aria-checked={r.answer === a} onClick={() => patch(i, { answer: a })}
-                          className={`min-h-11 rounded-lg border px-1.5 text-xs font-semibold transition ${r.answer === a ? 'border-orange-500 on-brand' : 'border-slate-300 text-slate-600'}`}>
+                          className={`${a === 'never' || a === 'unknown' ? 'col-span-3' : 'col-span-2'} min-h-11 rounded-lg border px-1.5 text-xs font-semibold transition ${r.answer === a ? 'border-orange-500 on-brand' : 'border-slate-300 text-slate-600'}`}>
                           {LAST_DONE_LABEL[a]}
                         </button>
                       ))}

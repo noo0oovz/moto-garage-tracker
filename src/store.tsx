@@ -134,7 +134,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     markServiced: (id, p) => setState((s) => {
       const item = s.maint.find((m) => m.id === id)
       if (!item) return s
-      const maint = s.maint.map((m) => (m.id === id ? { ...m, lastServiceKm: p.odometer, lastServiceDate: p.date } : m))
+      const maint = s.maint.map((m) => (m.id === id ? { ...m, lastServiceKm: p.odometer, lastServiceDate: p.date, unknownLast: undefined, neverDone: undefined } : m))
       const recId = uid()
       const record: ServiceRecord = {
         id: recId, vehicleId: item.vehicleId, maintItemId: id, name: item.name, date: p.date, odometer: p.odometer,
@@ -160,7 +160,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       let maint = s.maint
       if (next.maintItemId) {
         const newest = latestService(services, next.maintItemId)
-        if (newest) maint = maint.map((m) => (m.id === next.maintItemId ? { ...m, lastServiceKm: newest.odometer, lastServiceDate: newest.date } : m))
+        if (newest) maint = maint.map((m) => (m.id === next.maintItemId ? { ...m, lastServiceKm: newest.odometer, lastServiceDate: newest.date, unknownLast: undefined, neverDone: undefined } : m))
       }
       return { ...s, services, expenses, maint, vehicles: bumpOdo(s.vehicles, next.vehicleId, next.odometer) }
     }),

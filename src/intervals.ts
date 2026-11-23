@@ -255,16 +255,17 @@ export function keysCoveredBy(item: { name: string; guideKey?: string }): Set<Gu
 }
 
 // ---- "When was this last done?" ----------------------------------------------------------------------------------
-export type LastDone = 'just-done' | 'recent' | 'old' | 'unknown'
+export type LastDone = 'just-done' | 'recent' | 'old' | 'never' | 'unknown'
 
 export const LAST_DONE_LABEL: Record<LastDone, string> = {
   'just-done': 'Just done',
   'recent': 'Within 6 months',
   'old': 'Over a year ago',
+  'never': 'Never done',
   'unknown': "I don't know",
 }
 
-export interface LastService { lastServiceDate: string; lastServiceKm: number; unknownLast: boolean }
+export interface LastService { lastServiceDate: string; lastServiceKm: number; unknownLast: boolean; neverDone?: boolean }
 
 const pad = (n: number) => String(n).padStart(2, '0')
 function shiftDate(iso: string, months: number): string {
@@ -279,6 +280,7 @@ function shiftDate(iso: string, months: number): string {
  *  - "just done" is today at the current odometer;
  *  - "within 6 months" assumes about 3 months and the matching distance (never more than we can justify);
  *  - "over a year ago" assumes about 14 months and the matching distance;
+ *  - "never done" counts from when the vehicle was new (0 km), so it is due only once the vehicle has gone past the interval;
  *  - "I don't know" is NEVER treated as healthy: it is placed past the item's limit so it reads as due, and is flagged
  *    so the app can say "last service unknown" instead of pretending it knows.
  * `avgDailyKm` turns elapsed time into distance. The item's own limits decide how far back "unknown" goes.
@@ -296,6 +298,14 @@ export function lastServiceFor(
   if (answer === 'just-done') return { lastServiceDate: today, lastServiceKm: odometer, unknownLast: false }
   if (answer === 'recent') return back(3)
   if (answer === 'old') return back(14)
+  // never: the owner KNOWS it has not been done since the vehicle was new, so count from new. A bike with 500 km on it is
+  // not late for a 2,000 km service, but one with 40,000 km is. The date is when that odometer reading was probably
+  // reached (capped at 20 years so a typo cannot reach back to the 1900s).
+  if (answer === 'never') {
+    const km = Number.isFinite(odometer) ? Math.max(0, odometer) : 0
+    const monthsUsed = perMonth > 0 ? Math.min(240, Math.round(km / perMonth)) : 0
+    return { lastServiceDate: shiftDate(today, monthsUsed), lastServiceKm: 0, unknownLast: false, neverDone: true }
+  }
   // unknown: go back far enough that BOTH limits read as exceeded, so it is due however the owner drives
   const months = Math.max(limits.intervalMonths ?? 0, 12) + 1
   const km = limits.intervalKm ?? 0

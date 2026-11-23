@@ -53,6 +53,8 @@ export interface MaintItem {
   source?: 'general' | 'booklet' | 'custom'
   /** The owner did not know when this was last done, so the dates are placeholders and the item is treated as due. */
   unknownLast?: boolean
+  /** The owner says this has never been done since the vehicle was new, so its history is counted from 0 km. */
+  neverDone?: boolean
   /** Key into the interval guide (src/intervals.ts), so the plain-language "why" can be shown for this item. */
   guideKey?: string
 }

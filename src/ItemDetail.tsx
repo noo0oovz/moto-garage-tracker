@@ -42,7 +42,7 @@ export function ItemDetailModal({ itemId, close, openModal }: { itemId: string; 
               <dd className="num font-semibold" style={over(h.daysRemaining) ? { color: 'var(--over)' } : undefined}>
                 {h.daysRemaining === undefined ? '—' : over(h.daysRemaining) ? `${-h.daysRemaining} days over` : `about ${h.daysRemaining} days`}</dd></div>
             <div className="row justify-between"><dt style={{ color: 'var(--text-2)' }}>Last done</dt>
-              <dd className="num font-semibold">{num(m.lastServiceKm)} km · {fmtDate(m.lastServiceDate)}</dd></div>
+              <dd className="num font-semibold">{m.neverDone ? 'Never, since new' : `${num(m.lastServiceKm)} km · ${fmtDate(m.lastServiceDate)}`}</dd></div>
           </dl>
         )}
 

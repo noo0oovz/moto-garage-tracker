@@ -274,3 +274,52 @@ describe('recognising items the owner already tracks (so setup never duplicates 
     expect(offered).toEqual(expect.arrayContaining(['battery', 'wipers']))
   })
 })
+
+describe('"never done" answer', () => {
+  const today = '2026-06-15'
+  const limits = { intervalKm: 2000, intervalMonths: 3 }
+  const item = (last: ReturnType<typeof lastServiceFor>): MaintItem => ({ id: 'm', vehicleId: 'v', name: 'Engine oil', intervalKm: 2000, intervalMonths: 3, ...last })
+  const veh = (odometer: number, avgDailyKm = 30): Vehicle => ({ id: 'v', type: 'motorcycle', nickname: 'x', make: '', model: '', year: 2024, plate: '', odometer, avgDailyKm, codingDay: 'Exempt', fuelType: 'Gasoline' })
+
+  it('counts from new: 0 km, flagged neverDone, and not treated as unknown', () => {
+    const r = lastServiceFor('never', today, 40000, 30, limits)
+    expect(r.lastServiceKm).toBe(0)
+    expect(r.neverDone).toBe(true)
+    expect(r.unknownLast).toBe(false)
+  })
+
+  it('a high-mileage vehicle that never had it done is overdue', () => {
+    const r = lastServiceFor('never', today, 40000, 30, limits)
+    expect(maintHealth(item(r), veh(40000), today).status).toBe('Overdue')
+  })
+
+  it('a nearly new vehicle that never had it done is NOT overdue', () => {
+    const r = lastServiceFor('never', today, 300, 30, limits)
+    expect(maintHealth(item(r), veh(300), today).status).toBe('Healthy')
+  })
+
+  it('the first interval passing makes it due: 1,900 km is soon, 2,100 km is overdue', () => {
+    expect(maintHealth(item(lastServiceFor('never', today, 1900, 30, { intervalKm: 2000 })), veh(1900), today).status).not.toBe('Healthy')
+    expect(maintHealth(item(lastServiceFor('never', today, 2100, 30, { intervalKm: 2000 })), veh(2100), today).status).toBe('Overdue')
+  })
+
+  it('a brand-new vehicle (0 km) is never overdue, and bad inputs do not throw', () => {
+    expect(maintHealth(item(lastServiceFor('never', today, 0, 30, limits)), veh(0), today).status).toBe('Healthy')
+    for (const [odo, daily] of [[NaN, 30], [1e9, 30], [50000, 0], [50000, NaN], [-5, 30]] as const) {
+      const r = lastServiceFor('never', today, odo, daily, limits)
+      expect(Number.isFinite(r.lastServiceKm)).toBe(true)
+      expect(r.lastServiceDate).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    }
+  })
+
+  it('the date reaches back no further than 20 years', () => {
+    const r = lastServiceFor('never', today, 5_000_000, 1, limits)
+    expect(Number(r.lastServiceDate.slice(0, 4))).toBeGreaterThanOrEqual(2006)
+  })
+
+  it('is offered between "over a year ago" and "I don\'t know"', async () => {
+    const { LAST_DONE_LABEL } = await import('./intervals')
+    expect(Object.keys(LAST_DONE_LABEL)).toEqual(['just-done', 'recent', 'old', 'never', 'unknown'])
+    expect(LAST_DONE_LABEL.never).toBe('Never done')
+  })
+})
