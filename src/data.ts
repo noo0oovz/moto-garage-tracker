@@ -80,7 +80,7 @@ export const CHECKLIST_MOTO = [
 export function buildDemoState(today: string): AppState {
   const hilux: Vehicle = {
     id: uid(), type: 'car', nickname: '2018 Toyota Hilux G 4x2', make: 'Toyota', model: 'Hilux G 4x2', year: 2018,
-    plate: 'NBC 1234', odometer: 78400, avgDailyKm: 35, codingDay: 'Wednesday', fuelType: 'Diesel',
+    plate: 'NBC 1235', odometer: 78400, avgDailyKm: 35, codingDay: 'Wednesday', fuelType: 'Diesel',
   }
   const moto: Vehicle = {
     id: uid(), type: 'motorcycle', nickname: 'Daily Commuter Motorcycle', make: 'Honda', model: 'Click 160', year: 2022,

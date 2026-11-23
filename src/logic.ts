@@ -173,7 +173,7 @@ export function codingStatus(v: Vehicle, date = new Date()) {
   const weekend = date.getDay() === 0 || date.getDay() === 6
   const exemptReason =
     v.type === 'motorcycle' ? 'Motorcycles are generally exempt from UVVRP coding.'
-    : v.fuelType === 'EV' || v.fuelType === 'Hybrid' ? `${v.fuelType} vehicles are generally exempt from UVVRP coding.`
+    : v.fuelType === 'EV' || v.fuelType === 'Hybrid' ? `${v.fuelType} vehicles are currently exempt from UVVRP coding (the exemption runs until 2030).`
     : null
   const coding = v.codingDay as CodingDay
   if (coding === 'Exempt' || exemptReason) {
@@ -183,7 +183,7 @@ export function codingStatus(v: Vehicle, date = new Date()) {
   if (coding === today) {
     return {
       state: 'coding' as const, label: `Coding today (${today})`,
-      note: 'Typically 7:00-10:00 AM and 3:00-8:00 PM in Metro Manila (MMDA); LGUs may differ. Verify advisories.', today,
+      note: 'Typically 7:00-10:00 AM and 5:00-8:00 PM, Monday to Friday, in Metro Manila (MMDA); some cities differ. Check current advisories.', today,
     }
   }
   return { state: 'free' as const, label: `Free to drive today`, note: `Your coding day is ${coding}. Today is ${today}.`, today }

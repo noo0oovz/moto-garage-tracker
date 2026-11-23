@@ -4,6 +4,7 @@ import { useStore } from './store'
 import { CODING_DAYS, FUEL_TYPES, PART_TYPES } from './data'
 import { EXPENSE_CATEGORIES, PART_CONDITIONS, type CodingDay, type Expense, type ExpenseCategory, type FuelLog, type FuelType, type MaintItem, type PartCondition, type PartRecord, type ServiceRecord, type Vehicle, type VehicleType } from './types'
 import { peso, todayISO } from './logic'
+import { MONTH_NAMES, codingDayFor, codingIsAuto, nextRenewal } from './plate'
 
 export type ModalState =
   | { kind: 'log'; tab: 'fuel' | 'expense'; editFuel?: FuelLog; editExpense?: Expense }
@@ -285,9 +286,15 @@ function VehicleModal({ item, close }: { item?: Vehicle; close: () => void }) {
   const [plate, setPlate] = useState(item?.plate ?? '')
   const [odo, setOdo] = useState(String(item?.odometer ?? 0))
   const [daily, setDaily] = useState(String(item?.avgDailyKm ?? 30))
-  const [coding, setCoding] = useState<CodingDay>(item?.codingDay ?? 'Exempt')
+  // The coding day follows the plate (cars) or is Exempt (motorcycles) until the user picks a day themselves.
+  // A saved vehicle whose day already differs from its plate starts as a deliberate override and is left alone.
+  const [coding, setCoding] = useState<CodingDay>(item?.codingDay ?? codingDayFor(item?.type ?? 'car', item?.plate ?? ''))
+  const [codingManual, setCodingManual] = useState(item ? !codingIsAuto(item) : false)
   const [fuel, setFuel] = useState<FuelType>(item?.fuelType ?? 'Gasoline')
   const claim = useOnce()
+  const autoCoding = codingDayFor(type, plate)
+  const shownCoding = codingManual ? coding : autoCoding
+  const renewal = nextRenewal(plate, type, todayISO())
   return (
     <Modal title={item ? 'Edit Vehicle' : 'Add Vehicle'} onClose={close}>
       <form
@@ -297,7 +304,7 @@ function VehicleModal({ item, close }: { item?: Vehicle; close: () => void }) {
           if (!claim()) return
           saveVehicle({
             id: item?.id, type, nickname: nickname.trim() || `${make} ${model}`.trim() || 'My Vehicle', make, model,
-            year: numVal(year), plate, odometer: numVal(odo), avgDailyKm: numVal(daily), codingDay: coding, fuelType: fuel,
+            year: numVal(year), plate, odometer: numVal(odo), avgDailyKm: numVal(daily), codingDay: shownCoding, fuelType: fuel,
           })
           close()
         }}
@@ -314,11 +321,11 @@ function VehicleModal({ item, close }: { item?: Vehicle; close: () => void }) {
         <Field label="Make"><input className="field" value={make} onChange={(e) => setMake(e.target.value)} /></Field>
         <Field label="Model"><input className="field" value={model} onChange={(e) => setModel(e.target.value)} /></Field>
         <Field label="Year"><input type="number" inputMode="numeric" className="field" value={year} onChange={(e) => setYear(e.target.value)} /></Field>
-        <Field label="Plate Number"><input className="field uppercase" value={plate} onChange={(e) => setPlate(e.target.value)} /></Field>
+        <Field label="Plate Number"><input className="field uppercase" value={plate} onChange={(e) => setPlate(e.target.value)} autoCapitalize="characters" autoComplete="off" /></Field>
         <Field label="Odometer (km)"><input type="number" inputMode="numeric" className="field" value={odo} onChange={(e) => setOdo(e.target.value)} /></Field>
         <Field label="Avg Daily Km"><input type="number" inputMode="numeric" className="field" value={daily} onChange={(e) => setDaily(e.target.value)} /></Field>
         <Field label="Coding Day">
-          <select className="field" value={coding} onChange={(e) => setCoding(e.target.value as CodingDay)}>
+          <select className="field" value={shownCoding} onChange={(e) => { setCoding(e.target.value as CodingDay); setCodingManual(true) }}>
             {CODING_DAYS.map((d) => <option key={d} value={d}>{d === 'Exempt' ? 'Exempt / None' : d}</option>)}
           </select>
         </Field>
@@ -327,6 +334,21 @@ function VehicleModal({ item, close }: { item?: Vehicle; close: () => void }) {
             {FUEL_TYPES.map((f) => <option key={f}>{f}</option>)}
           </select>
         </Field>
+        <p className="col-span-2 -mt-1 text-xs text-slate-500" aria-live="polite">
+          {codingManual && shownCoding !== autoCoding ? (
+            <>Set by you. Your plate{autoCoding === 'Exempt' ? '' : ` would give ${autoCoding}`}. <button type="button" className="font-semibold text-orange-500 underline" onClick={() => setCodingManual(false)}>Use plate rule</button></>
+          ) : type === 'motorcycle' ? 'Motorcycles are not number-coded, so this is set to Exempt automatically.'
+            : autoCoding === 'Exempt' ? 'Enter your plate number and the coding day fills in from its last digit.'
+            : `Filled in from the last digit of your plate (${autoCoding}).`}
+        </p>
+        {renewal && (
+          <p className={`col-span-2 rounded-xl border px-3 py-2 text-xs ${renewal.status === 'overdue' ? 'border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-300' : renewal.status === 'due' || renewal.status === 'soon' ? 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'border-slate-300 text-slate-600 dark:border-white/10 dark:text-slate-300'}`}>
+            {renewal.status === 'overdue'
+              ? <>Registration looks <b>overdue</b>: it was due by the end of <b>{MONTH_NAMES[renewal.month - 1]} {renewal.deadline.slice(0, 4)}</b> ({-renewal.daysLeft} day{renewal.daysLeft === -1 ? '' : 's'} ago).</>
+              : <>Estimated registration deadline: <b>{MONTH_NAMES[renewal.month - 1]} {renewal.deadline.slice(0, 4)}</b> (by {renewal.deadline.slice(5, 7)}/{renewal.deadline.slice(8)}).</>}
+            {' '}Based on the plate&rsquo;s last digit; confirm your exact dates with LTO.
+          </p>
+        )}
         {!item && <p className="col-span-2 text-xs text-slate-500">A tailored {type === 'car' ? 'car/pickup' : 'motorcycle'} maintenance schedule will be added automatically.</p>}
         <button className="btn-primary col-span-2" type="submit">{item ? 'Save changes' : 'Add vehicle'}</button>
       </form>

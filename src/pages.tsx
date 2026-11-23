@@ -8,10 +8,11 @@ import { Empty, Progress } from './ui'
 import type { ModalState } from './modals'
 import type { Page, Vehicle } from './types'
 import {
-  backupStatus, buildLedger, codingStatus, csvEscape, fmtDate, fuelEfficiency, loggedKmSpan, maintHealth, num, peso, spendSummary, statusColor,
+  backupStatus, buildLedger, codingStatus, csvEscape, fmtDate, fuelEfficiency, loggedKmSpan, maintHealth, num, peso, spendSummary, statusColor, todayISO,
 } from './logic'
 import { CHECKLIST_CAR, CHECKLIST_MOTO } from './data'
 import { useMinWidth } from './useLayout'
+import { MONTH_NAMES, nextRenewal } from './plate'
 
 type Open = (m: ModalState) => void
 
@@ -52,6 +53,24 @@ function Kpi({ icon: Icon, label, value, sub }: { icon: typeof Gauge; label: str
   )
 }
 
+/** Estimated registration deadline from the plate. Hidden when the plate has no digit or the deadline is far off. */
+export function RegistrationBanner({ v }: { v: Vehicle }) {
+  const r = nextRenewal(v.plate, v.type, todayISO())
+  if (!r || r.status === 'ok') return null
+  const tone = r.status === 'overdue' ? 'border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-300' : 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+  return (
+    <div role="status" className={`flex items-start gap-3 rounded-2xl border p-3 ${tone}`}>
+      <CalendarClock size={22} className="mt-0.5 shrink-0" />
+      <div className="min-w-0">
+        <p className="text-sm font-bold">
+          {r.status === 'overdue' ? `Registration was due ${MONTH_NAMES[r.month - 1]}` : r.daysLeft === 0 ? 'Registration is due today' : `Registration due in ${r.daysLeft} day${r.daysLeft === 1 ? '' : 's'}`}
+        </p>
+        <p className="text-xs opacity-80">Estimated from plate {v.plate}: renew by the end of {MONTH_NAMES[r.month - 1]}. Confirm exact dates with LTO.</p>
+      </div>
+    </div>
+  )
+}
+
 export function GaragePage({ open, go }: { open: Open; go: (p: Page) => void }) {
   const { state, vehicle } = useStore()
   const data = useMemo(() => {
@@ -71,6 +90,7 @@ export function GaragePage({ open, go }: { open: Open; go: (p: Page) => void }) 
   return (
     <div className="page space-y-5">
       <CodingBanner v={vehicle} />
+      <RegistrationBanner v={vehicle} />
       <button onClick={() => go('fuelwatch')} className="card flex min-h-14 w-full items-center gap-3 p-3 text-left transition hover:border-orange-500/50">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-orange-500/15 text-orange-500"><MapPin size={20} /></span>
         <span className="min-w-0 flex-1">
