@@ -174,7 +174,6 @@ export function GaragePage({ open, go }: { open: Open; go: (p: Page) => void }) 
   }, [state, vehicle])
 
   if (!vehicle || !data) return <Empty>No vehicles yet. Add one from More → Vehicles.</Empty>
-  const attention = data.items.filter((i) => i.h.status !== 'Healthy').length
 
   return (
     <div className="page space-y-5">
@@ -189,14 +188,10 @@ export function GaragePage({ open, go }: { open: Open; go: (p: Page) => void }) 
         <ChevronRight size={16} className="text-slate-400" />
       </button>
 
-      <div className="no-scrollbar -mx-4 flex snap-x gap-3 overflow-x-auto px-4 md:mx-0 md:grid md:grid-cols-2 md:overflow-visible md:px-0 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3">
         <Kpi icon={Gauge} label="Odometer" value={`${num(vehicle.odometer)} km`} sub={`~${vehicle.avgDailyKm} km/day`} />
-        <Kpi icon={Wallet} label="Spent this month" value={peso(data.sum.thisMonth)} sub={`All time ${peso(data.sum.all)}`} />
         <Kpi icon={Fuel} label="Avg efficiency" value={data.eff.avg ? `${data.eff.avg.toFixed(1)} km/L` : '—'}
           sub={data.eff.last ? `Last fill ${data.eff.last.toFixed(1)} km/L` : 'Log 2+ full tanks'} />
-        <Kpi icon={attention ? ShieldAlert : TrendingUp} label="Maintenance"
-          value={attention ? `${attention} ${attention === 1 ? 'item needs' : 'items need'} attention` : 'All healthy'}
-          sub={data.sum.perKm ? `Cost per km ${peso(data.sum.perKm, 2)}` : 'Cost per km —'} />
       </div>
 
       <section>
