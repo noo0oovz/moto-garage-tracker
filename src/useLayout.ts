@@ -33,3 +33,17 @@ export function useLayout(): LayoutMode {
   }, [])
   return mode
 }
+
+/** True while the viewport is at least `px` wide. Use to render ONE of two alternative views instead of both. */
+export function useMinWidth(px: number): boolean {
+  const q = `(min-width: ${px}px)`
+  const [on, setOn] = useState(() => (typeof window !== 'undefined' && 'matchMedia' in window ? window.matchMedia(q).matches : false))
+  useEffect(() => {
+    const m = window.matchMedia(q)
+    const h = () => setOn(m.matches)
+    h()
+    m.addEventListener('change', h)
+    return () => m.removeEventListener('change', h)
+  }, [q])
+  return on
+}

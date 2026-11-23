@@ -10,17 +10,28 @@ export const num = (n: number, dec = 0) => n.toLocaleString('en-PH', { maximumFr
 function pad(n: number) { return String(n).padStart(2, '0') }
 export function toISO(d: Date) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` }
 export function todayISO() { return toISO(new Date()) }
-export function parseISO(s: string) {
+/** True for a real calendar date written YYYY-MM-DD (rejects 2026-02-30, "garbage", ""). */
+export function isISODate(s: unknown): s is string {
+  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false
   const [y, m, d] = s.split('-').map(Number)
-  return new Date(y, (m || 1) - 1, d || 1)
+  const t = new Date(y, m - 1, d)
+  return t.getFullYear() === y && t.getMonth() === m - 1 && t.getDate() === d
+}
+/** Parse YYYY-MM-DD as a local date. Anything that is not a real date yields an Invalid Date (never a silent rollover). */
+export function parseISO(s: string) {
+  if (!isISODate(s)) return new Date(NaN)
+  const [y, m, d] = s.split('-').map(Number)
+  return new Date(y, m - 1, d)
 }
 export function addDays(s: string, n: number) {
   const d = parseISO(s)
+  if (Number.isNaN(d.getTime())) return ''
   d.setDate(d.getDate() + n)
   return toISO(d)
 }
 export function addMonths(s: string, n: number) {
   const d = parseISO(s)
+  if (Number.isNaN(d.getTime())) return ''
   const day = d.getDate()
   d.setDate(1)
   d.setMonth(d.getMonth() + n)
@@ -32,7 +43,8 @@ export function daysBetween(a: string, b: string) {
   return Math.round((parseISO(b).getTime() - parseISO(a).getTime()) / 86400000)
 }
 export function fmtDate(s: string) {
-  return parseISO(s).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+  const d = parseISO(s)
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 export type Status = 'Healthy' | 'Due Soon' | 'Overdue'
@@ -50,19 +62,24 @@ export function maintHealth(m: MaintItem, v: Vehicle, today = todayISO()): Healt
   let kmRemaining: number | undefined
   let daysByKm: number | undefined
   let daysByDate: number | undefined
-  if (m.intervalKm) {
-    const used = v.odometer - m.lastServiceKm
+  if (m.intervalKm && m.intervalKm > 0) {
+    // An odometer below the last-service reading is a typo, not negative wear: count it as no distance used.
+    const used = Math.max(0, v.odometer - m.lastServiceKm)
     kmRemaining = m.intervalKm - used
     fracs.push(used / m.intervalKm)
     if (v.avgDailyKm > 0) daysByKm = Math.floor(kmRemaining / v.avgDailyKm)
   }
   let dueDate: string | undefined
-  if (m.intervalMonths) {
-    dueDate = addMonths(m.lastServiceDate, m.intervalMonths)
-    const total = daysBetween(m.lastServiceDate, dueDate)
-    const elapsed = daysBetween(m.lastServiceDate, today)
-    daysByDate = total - elapsed
-    fracs.push(total > 0 ? elapsed / total : 1)
+  if (m.intervalMonths && m.intervalMonths > 0) {
+    // An unreadable service date means the time limit is unknown: skip it rather than show "NaN days".
+    const due = addMonths(m.lastServiceDate, m.intervalMonths)
+    const total = due ? daysBetween(m.lastServiceDate, due) : NaN
+    const elapsed = due ? daysBetween(m.lastServiceDate, today) : NaN
+    if (Number.isFinite(total) && Number.isFinite(elapsed)) {
+      dueDate = due
+      daysByDate = total - elapsed
+      fracs.push(total > 0 ? elapsed / total : 1)
+    }
   }
   const frac = fracs.length ? Math.max(...fracs) : 0
   const cands = [daysByKm, daysByDate].filter((x): x is number => x !== undefined)
@@ -217,6 +234,9 @@ export function backupStatus(s: { installedAt?: string; lastBackupAt?: string },
 }
 
 export function csvEscape(v: unknown) {
-  const s = v === undefined || v === null ? '' : String(v)
+  let s = v === undefined || v === null ? '' : String(v)
+  // Spreadsheet formula injection: a text cell starting with = + - @ (or tab/CR) runs as a formula in Excel/Sheets.
+  // Real numbers such as -5 are legitimate; only free text is prefixed with an apostrophe so it stays inert.
+  if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s)) s = `'${s}`
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }

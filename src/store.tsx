@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { AppState, Expense, FuelLog, MaintItem, PartRecord, ServiceRecord, Vehicle } from './types'
 import { STORAGE_KEY, buildDemoState, buildMaintenance } from './data'
 import { latestService, syncLinkedExpense, todayISO, uid } from './logic'
@@ -55,8 +55,27 @@ const Ctx = createContext<Store | null>(null)
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>(load)
 
+  // Another tab changed the data: adopt it, so this tab never overwrites that work with a stale copy. The `storage`
+  // event is only delivered to OTHER tabs, so our own writes cannot loop back here.
+  const lastWritten = useRef<string | null>(null)
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)) } catch { /* quota/private mode */ }
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== STORAGE_KEY || e.newValue === null || e.newValue === lastWritten.current) return
+      try {
+        const next = migrate(JSON.parse(e.newValue))
+        if (next) { lastWritten.current = e.newValue; setState(next) }
+      } catch { /* ignore a half-written value from the other tab */ }
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
+
+  useEffect(() => {
+    try {
+      const json = JSON.stringify(state)
+      // Skip the write when this state came from the other tab (it is already stored).
+      if (json !== lastWritten.current) { localStorage.setItem(STORAGE_KEY, json); lastWritten.current = json }
+    } catch { /* quota/private mode */ }
     const light = state.theme === 'light'
     document.documentElement.classList.toggle('dark', !light)
     document.documentElement.style.colorScheme = light ? 'light' : 'dark'

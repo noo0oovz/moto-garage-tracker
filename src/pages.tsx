@@ -11,6 +11,7 @@ import {
   backupStatus, buildLedger, codingStatus, csvEscape, fmtDate, fuelEfficiency, loggedKmSpan, maintHealth, num, peso, spendSummary, statusColor,
 } from './logic'
 import { CHECKLIST_CAR, CHECKLIST_MOTO } from './data'
+import { useMinWidth } from './useLayout'
 
 type Open = (m: ModalState) => void
 
@@ -137,17 +138,23 @@ export function GaragePage({ open, go }: { open: Open; go: (p: Page) => void }) 
 export function LogsPage({ open }: { open: Open }) {
   const { state, vehicle, deleteLog } = useStore()
   const [filter, setFilter] = useState('All')
+  const [limit, setLimit] = useState(100)
+  const wide = useMinWidth(1280)
   const [q, setQ] = useState('')
   const rows = useMemo(() => (vehicle ? buildLedger(state.fuel, state.expenses, vehicle.id) : []), [state, vehicle])
   const sum = useMemo(() => (vehicle ? spendSummary(rows, loggedKmSpan(state.fuel, state.expenses, vehicle.id)) : null), [rows, state, vehicle])
   if (!vehicle || !sum) return <Empty>No vehicle selected.</Empty>
 
   const cats = ['All', ...Object.keys(sum.byCat)]
+  const needle = q.trim().toLowerCase()
   const shown = rows.filter((r) => (filter === 'All' || r.category === filter) &&
-    (!q || `${r.place} ${r.desc} ${r.category}`.toLowerCase().includes(q.toLowerCase())))
+    (!needle || `${r.place} ${r.desc} ${r.category}`.toLowerCase().includes(needle)))
   const max = Math.max(1, ...Object.values(sum.byCat))
+  const visible = shown.slice(0, limit)
   const del = (r: (typeof rows)[number]) => { if (confirm('Delete this entry?')) deleteLog(r.kind, r.id) }
-  const linked = (r: (typeof rows)[number]) => r.kind === 'expense' && !!state.expenses.find((x) => x.id === r.id)?.sourceId
+  // Set lookup: a per-row find() over every expense is O(rows x expenses) and freezes the page on a big ledger.
+  const linkedIds = new Set(state.expenses.filter((x) => x.sourceId).map((x) => x.id))
+  const linked = (r: (typeof rows)[number]) => r.kind === 'expense' && linkedIds.has(r.id)
   const edit = (r: (typeof rows)[number]) => {
     if (r.kind === 'fuel') {
       const f = state.fuel.find((x) => x.id === r.id)
@@ -190,8 +197,8 @@ export function LogsPage({ open }: { open: Open }) {
         <div className="mb-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
           <h2 className="text-lg font-bold">Ledger</h2>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <input className="field sm:w-56" placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} />
-            <select className="field sm:w-52" value={filter} onChange={(e) => setFilter(e.target.value)}>
+            <input className="field sm:w-56" placeholder="Search…" value={q} onChange={(e) => { setQ(e.target.value); setLimit(100) }} />
+            <select className="field sm:w-52" value={filter} onChange={(e) => { setFilter(e.target.value); setLimit(100) }}>
               {cats.map((c) => <option key={c}>{c}</option>)}
             </select>
           </div>
@@ -199,8 +206,8 @@ export function LogsPage({ open }: { open: Open }) {
         {shown.length === 0 ? <Empty>No entries match.</Empty> : (
           <>
             {/* Mobile / tablet cards */}
-            <ul className="grid gap-2 md:grid-cols-2 xl:hidden">
-              {shown.map((r) => (
+            {!wide && <ul className="grid gap-2 md:grid-cols-2">
+              {visible.map((r) => (
                 <li key={r.id} className="card flex items-center gap-3 p-3">
                   <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${r.kind === 'fuel' ? 'bg-sky-500/15 text-sky-500' : 'bg-orange-500/15 text-orange-500'}`}>
                     {r.kind === 'fuel' ? <Fuel size={18} /> : <Wrench size={18} />}
@@ -219,15 +226,15 @@ export function LogsPage({ open }: { open: Open }) {
                   </div>
                 </li>
               ))}
-            </ul>
+            </ul>}
             {/* Desktop table */}
-            <div className="card hidden overflow-x-auto xl:block">
+            {wide && <div className="card overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-white/5">
                   <tr>{['Date', 'Category', 'Shop / Station', 'Details', 'Odometer', 'km/L', 'Cost', ''].map((h) => <th key={h} className="px-4 py-3 font-semibold">{h}</th>)}</tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 dark:divide-white/10">
-                  {shown.map((r) => (
+                  {visible.map((r) => (
                     <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-white/5">
                       <td className="whitespace-nowrap px-4 py-3">{fmtDate(r.date)}</td>
                       <td className="px-4 py-3">{r.category}</td>
@@ -241,7 +248,13 @@ export function LogsPage({ open }: { open: Open }) {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </div>}
+            {shown.length > limit && (
+              <div className="mt-3 flex flex-col items-center gap-1">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Showing {limit} of {shown.length} entries</p>
+                <button className="btn-ghost" onClick={() => setLimit((l) => l + 200)}>Show 200 more</button>
+              </div>
+            )}
           </>
         )}
         <button className="btn-primary mt-4 md:hidden" onClick={() => open({ kind: 'log', tab: 'fuel' })}><Plus size={16} /> New log</button>

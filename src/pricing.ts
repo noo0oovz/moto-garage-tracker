@@ -1,5 +1,6 @@
 // Fuel Watch: types + pure logic for DOE pump-price data and "nearest area" estimates.
 // Everything here runs in the browser; the user's location never leaves the device.
+import { isISODate } from './logic'
 
 export const FW_PRODUCTS = ['RON 91', 'RON 95', 'RON 97', 'RON 100', 'DIESEL', 'DIESEL PLUS', 'KEROSENE'] as const
 export type FwProduct = (typeof FW_PRODUCTS)[number]
@@ -145,14 +146,14 @@ const median = (v: number[]) => {
 export function typicalPrice(a: FwArea, p: FwProduct) {
   const brands = a.prices[p]
   if (!brands) return null
-  const v = Object.values(brands).map(([lo, hi]) => (lo + hi) / 2)
+  const v = Object.values(brands).filter((b) => Array.isArray(b) && Number.isFinite(b[0]) && Number.isFinite(b[1])).map(([lo, hi]) => (lo + hi) / 2)
   return median(v)
 }
 
 export interface BrandRow { brand: string; lo: number; hi: number; mid: number }
 export function brandRows(a: FwArea, p: FwProduct): BrandRow[] {
   const brands = a.prices[p] ?? {}
-  return Object.entries(brands).map(([brand, [lo, hi]]) => ({ brand, lo, hi, mid: (lo + hi) / 2 })).sort((x, y) => x.mid - y.mid)
+  return Object.entries(brands).filter(([, v]) => Array.isArray(v) && Number.isFinite(v[0]) && Number.isFinite(v[1])).map(([brand, [lo, hi]]) => ({ brand, lo, hi, mid: (lo + hi) / 2 })).sort((x, y) => x.mid - y.mid)
 }
 
 /** Cheapest big-brand price per product across an area, for the "who's cheapest" strip. */
@@ -184,15 +185,57 @@ export function freshness(weekEnd: string, today = new Date()): Freshness {
   return d <= 7 ? 'current' : d <= 14 ? 'aging' : 'stale'
 }
 
+const isRec = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x)
+const priceOk = (v: unknown): v is [number, number] =>
+  Array.isArray(v) && v.length === 2 && v.every((n) => typeof n === 'number' && Number.isFinite(n) && n > 0 && n < 1000) && v[0] <= v[1]
+
+/**
+ * Validate the downloaded price file. It is produced by a scheduled job, so a bad run could commit junk; one
+ * malformed row must never blank the page, so every area, price and adjustment is checked and bad ones are dropped.
+ */
 export function parseFuelData(raw: unknown): FwData | null {
-  if (!raw || typeof raw !== 'object') return null
-  const d = raw as Partial<FwData>
-  if ((d.schema !== 1 && d.schema !== 2) || !Array.isArray(d.regions)) return null
-  const regions = d.regions.filter((r): r is FwRegion => !!r && typeof r.id === 'string' && Array.isArray(r.areas))
-  const adjustments = (Array.isArray(d.adjustments) ? d.adjustments : []).filter(
-    (a): a is FwAdjustment => !!a && typeof a.weekStart === 'string' && typeof a.weekEnd === 'string' && !!a.brands && typeof a.brands === 'object',
-  )
-  return { schema: d.schema, generatedAt: String(d.generatedAt ?? ''), source: String(d.source ?? ''), problems: d.problems, regions, adjustments }
+  if (!isRec(raw)) return null
+  if ((raw.schema !== 1 && raw.schema !== 2) || !Array.isArray(raw.regions)) return null
+  const regions: FwRegion[] = []
+  for (const r of raw.regions) {
+    if (!isRec(r) || typeof r.id !== 'string' || !Array.isArray(r.areas)) continue
+    const areas: FwArea[] = []
+    for (const a of r.areas) {
+      if (!isRec(a) || typeof a.name !== 'string' || !a.name || !isRec(a.prices)) continue
+      const prices: FwArea['prices'] = {}
+      for (const [prod, brands] of Object.entries(a.prices)) {
+        if (!(FW_PRODUCTS as readonly string[]).includes(prod) || !isRec(brands)) continue
+        const clean: Record<string, [number, number]> = {}
+        for (const [brand, v] of Object.entries(brands)) if (priceOk(v)) clean[brand] = [v[0], v[1]]
+        if (Object.keys(clean).length) prices[prod as FwProduct] = clean
+      }
+      areas.push({ name: a.name, province: typeof a.province === 'string' ? a.province : '', prices })
+    }
+    regions.push({
+      id: r.id, label: typeof r.label === 'string' ? r.label : r.id, weekStart: typeof r.weekStart === 'string' ? r.weekStart : '',
+      weekEnd: typeof r.weekEnd === 'string' ? r.weekEnd : '', sources: Array.isArray(r.sources) ? r.sources.filter((x): x is string => typeof x === 'string') : [], areas,
+    })
+  }
+  const adjustments: FwAdjustment[] = []
+  for (const a of Array.isArray(raw.adjustments) ? raw.adjustments : []) {
+    if (!isRec(a) || !isISODate(a.weekStart) || !isISODate(a.weekEnd) || !isRec(a.brands)) continue
+    const brands: FwAdjustment['brands'] = {}
+    for (const [b, prods] of Object.entries(a.brands)) {
+      if (!isRec(prods)) continue
+      const clean: FwAdjustment['brands'][string] = {}
+      for (const g of ['gasoline', 'diesel', 'kerosene'] as const) {
+        const v = prods[g]
+        // A weekly change beyond +/-40 pesos is not a real announcement; treat it as corrupt.
+        if (typeof v === 'number' && Number.isFinite(v) && Math.abs(v) < 40) clean[g] = v
+      }
+      brands[b] = clean
+    }
+    adjustments.push({ weekStart: a.weekStart, weekEnd: a.weekEnd, source: typeof a.source === 'string' ? a.source : '', brands })
+  }
+  return {
+    schema: raw.schema as number, generatedAt: typeof raw.generatedAt === 'string' ? raw.generatedAt : '', source: typeof raw.source === 'string' ? raw.source : '',
+    problems: Array.isArray(raw.problems) ? raw.problems.filter((x): x is string => typeof x === 'string') : undefined, regions, adjustments,
+  }
 }
 
 // ---- Announced weekly adjustments -------------------------------------------------------------
@@ -200,9 +243,10 @@ export const productGroup = (p: FwProduct): 'gasoline' | 'diesel' | 'kerosene' =
   p === 'DIESEL' || p === 'DIESEL PLUS' ? 'diesel' : p === 'KEROSENE' ? 'kerosene' : 'gasoline'
 
 const addDaysISO = (iso: string, n: number) => {
+  if (!isISODate(iso)) return ''
   const d = new Date(iso + 'T00:00:00Z')
   d.setUTCDate(d.getUTCDate() + n)
-  return d.toISOString().slice(0, 10)
+  return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10)
 }
 
 export interface Projected {
@@ -226,13 +270,17 @@ export function projectPrice(
 ): Projected | null {
   const group = productGroup(product)
   const byStart = new Map(data.adjustments.map((a) => [a.weekStart, a]))
+  if (!isISODate(regionWeekStart) || !isISODate(today)) return null
   let week = addDaysISO(regionWeekStart, 7)
   let delta = 0
   const weeks: string[] = []
-  while (week <= today) {
+  // A real chain is a handful of weeks. Anything longer means the measurement is stale beyond use (or the date is
+  // corrupt), and a long walk would only be wasted work: refuse rather than loop.
+  while (week && week <= today) {
+    if (weeks.length >= 12) return null
     const adj = byStart.get(week)
-    const v = adj?.brands[brand]?.[group]
-    if (v === undefined) return null // gap in the chain
+    const v = adj?.brands?.[brand]?.[group]
+    if (typeof v !== 'number' || !Number.isFinite(v)) return null // gap in the chain
     delta += v
     weeks.push(week)
     week = addDaysISO(week, 7)

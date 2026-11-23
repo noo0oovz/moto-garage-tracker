@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Modal, Field, Toggle, numVal } from './ui'
+import { Modal, Field, Toggle, numVal, useOnce } from './ui'
 import { useStore } from './store'
 import { CODING_DAYS, FUEL_TYPES, PART_TYPES } from './data'
 import { EXPENSE_CATEGORIES, PART_CONDITIONS, type CodingDay, type Expense, type ExpenseCategory, type FuelLog, type FuelType, type MaintItem, type PartCondition, type PartRecord, type ServiceRecord, type Vehicle, type VehicleType } from './types'
@@ -50,9 +50,10 @@ function LogModal({ initial, editFuel, editExpense, close }: { initial: 'fuel' |
   const odoLow = !editing && numVal(odo) > 0 && numVal(odo) < (vehicle?.odometer ?? 0) && date >= todayISO()
   const valid = (tab === 'fuel' ? numVal(liters) > 0 && numVal(total) > 0 && numVal(odo) > 0 : numVal(cost) > 0) && !odoLow
 
+  const claim = useOnce()
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!valid) return
+    if (!valid || !claim()) return
     const odometer = numVal(odo) || undefined
     if (tab === 'fuel') {
       const f = {
@@ -128,12 +129,14 @@ function PartModal({ item, close }: { item?: PartRecord; close: () => void }) {
   const [warranty, setWarranty] = useState(item?.warrantyMonths ? String(item.warrantyMonths) : '')
   const [notes, setNotes] = useState(item?.notes ?? '')
   if (!vehicle) return null
+  const claim = useOnce()
   return (
     <Modal title={item ? 'Edit Part Replacement' : 'Add Part Replacement'} onClose={close}>
       <form
         className="grid grid-cols-2 gap-3"
         onSubmit={(e) => {
           e.preventDefault()
+          if (!claim()) return
           const rec = {
             partType, condition, description, brand, partNumber, shop, amount: numVal(amount),
             installedKm: numVal(km), date, warrantyMonths: numVal(warranty) > 0 ? numVal(warranty) : undefined, notes,
@@ -171,12 +174,14 @@ function EditServiceModal({ item, close }: { item: ServiceRecord; close: () => v
   const [cost, setCost] = useState(item.cost ? String(item.cost) : '')
   const [shop, setShop] = useState(item.shopName ?? '')
   const [notes, setNotes] = useState(item.notes ?? '')
+  const claim = useOnce()
   return (
     <Modal title="Edit Service Record" onClose={close}>
       <form
         className="grid grid-cols-2 gap-3"
         onSubmit={(e) => {
           e.preventDefault()
+          if (!claim()) return
           updateService(item.id, { date, odometer: numVal(odo), cost: numVal(cost) > 0 ? numVal(cost) : undefined, shopName: shop, notes })
           close()
         }}
@@ -200,12 +205,14 @@ function ServiceModal({ item, close }: { item: MaintItem; close: () => void }) {
   const [record, setRecord] = useState(true)
   const [cost, setCost] = useState('')
   const [shop, setShop] = useState('')
+  const claim = useOnce()
   return (
     <Modal title="Mark Serviced" onClose={close}>
       <form
         className="grid grid-cols-2 gap-3"
         onSubmit={(e) => {
           e.preventDefault()
+          if (!claim()) return
           markServiced(item.id, { date, odometer: numVal(odo), cost: record ? numVal(cost) : undefined, shopName: shop, notes: item.name })
           close()
         }}
@@ -235,13 +242,14 @@ function MaintModal({ item, close }: { item?: MaintItem; close: () => void }) {
   const [lastDate, setLastDate] = useState(item?.lastServiceDate ?? todayISO())
   if (!vehicle) return null
   const valid = name.trim() && (numVal(km) > 0 || numVal(mo) > 0)
+  const claim = useOnce()
   return (
     <Modal title={item ? 'Edit Maintenance Item' : 'Add Maintenance Item'} onClose={close}>
       <form
         className="grid grid-cols-2 gap-3"
         onSubmit={(e) => {
           e.preventDefault()
-          if (!valid) return
+          if (!valid || !claim()) return
           saveMaint({
             id: item?.id, vehicleId: vehicle.id, name: name.trim(),
             intervalKm: numVal(km) > 0 ? numVal(km) : undefined, intervalMonths: numVal(mo) > 0 ? numVal(mo) : undefined,
@@ -279,12 +287,14 @@ function VehicleModal({ item, close }: { item?: Vehicle; close: () => void }) {
   const [daily, setDaily] = useState(String(item?.avgDailyKm ?? 30))
   const [coding, setCoding] = useState<CodingDay>(item?.codingDay ?? 'Exempt')
   const [fuel, setFuel] = useState<FuelType>(item?.fuelType ?? 'Gasoline')
+  const claim = useOnce()
   return (
     <Modal title={item ? 'Edit Vehicle' : 'Add Vehicle'} onClose={close}>
       <form
         className="grid grid-cols-2 gap-3"
         onSubmit={(e) => {
           e.preventDefault()
+          if (!claim()) return
           saveVehicle({
             id: item?.id, type, nickname: nickname.trim() || `${make} ${model}`.trim() || 'My Vehicle', make, model,
             year: numVal(year), plate, odometer: numVal(odo), avgDailyKm: numVal(daily), codingDay: coding, fuelType: fuel,

@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 
 export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
@@ -75,4 +75,18 @@ export function Empty({ children }: { children: ReactNode }) {
 export const numVal = (s: string) => {
   const n = parseFloat(s)
   return Number.isFinite(n) ? n : 0
+}
+
+/**
+ * A one-shot lock for form submission. A double tap on a slow phone fires the submit handler twice before the dialog
+ * has closed, which would otherwise save the same record twice. Call `claim()` only once the form is valid and about
+ * to save: it returns true the first time and false afterwards, so an invalid first attempt does not lock the form.
+ */
+export function useOnce() {
+  const done = useRef(false)
+  return useCallback(() => {
+    if (done.current) return false
+    done.current = true
+    return true
+  }, [])
 }

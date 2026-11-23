@@ -17,7 +17,8 @@ const LS_PRODUCT = 'motogarage-fw-product'
 
 function ls(k: string): string | null { try { return localStorage.getItem(k) } catch { return null } }
 function lsSet(k: string, v: string) { try { localStorage.setItem(k, v) } catch { /* private mode */ } }
-const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
+// DOE weeks follow Philippine time, so "today" for price estimates is the Manila date wherever the user is.
+const todayISO = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date())
 
 const BRAND_STYLE: Record<string, string> = {
   PETRON: 'bg-blue-500', SHELL: 'bg-yellow-400', CALTEX: 'bg-red-500', PHOENIX: 'bg-orange-500', TOTAL: 'bg-rose-500',

@@ -29,10 +29,29 @@ const arg = (k, d) => (args.includes(k) ? args[args.indexOf(k) + 1] : d)
 const OUT = arg('--out', 'public/fuel-prices.json')
 const PREV = arg('--prev', 'public/fuel-prices.json')
 
-async function get(url, binary) {
-  const res = await fetch(url, { headers: UA })
-  if (!res.ok) throw new Error(`${res.status} ${url}`)
-  return binary ? Buffer.from(await res.arrayBuffer()) : res.text()
+/** GET with a hard timeout and a couple of retries: DOE's CDN occasionally stalls, and a hung request would otherwise hold the job for hours. */
+async function get(url, binary, attempts = 3) {
+  let lastErr
+  for (let i = 1; i <= attempts; i++) {
+    const ctl = new AbortController()
+    const timer = setTimeout(() => ctl.abort(), 30000)
+    try {
+      const res = await fetch(url, { headers: UA, signal: ctl.signal })
+      if (!res.ok) {
+        // 4xx will not get better by retrying; 5xx and 429 might.
+        if (res.status < 500 && res.status !== 429) throw Object.assign(new Error(`${res.status} ${url}`), { fatal: true })
+        throw new Error(`${res.status} ${url}`)
+      }
+      return binary ? Buffer.from(await res.arrayBuffer()) : await res.text()
+    } catch (e) {
+      lastErr = e.name === 'AbortError' ? new Error(`timeout after 30s: ${url}`) : e
+      if (e.fatal || i === attempts) break
+      await new Promise((r) => setTimeout(r, 1500 * i))
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+  throw lastErr
 }
 
 function pdfLinks(html) {
@@ -51,7 +70,9 @@ function weekFromLabel(label, year) {
   return parseWeek(`${label.replace(/\bto\b/i, '-')} ${year}`)
 }
 
-const today = () => new Date().toISOString().slice(0, 10)
+// DOE weeks run in Philippine time. Using the UTC date would make a run between 00:00 and 08:00 PH time think it is
+// still the previous day and skip a week that has just started.
+const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date())
 
 async function importRegion(region, td) {
   const html = await get(SITE + region.page, false)
@@ -123,6 +144,12 @@ async function main() {
       const old = prev?.regions?.find((x) => x.id === region.id)
       // Never replace newer data with older data (DOE sometimes reorders or reposts).
       if (old && old.weekStart > r.region.weekStart) { regions.push(old); problems.push(`${region.id}: kept newer previous week ${old.weekStart}`) }
+      // A half-broken parse can still clear the minimum. If the new week has far fewer areas than the last one, the
+      // layout probably changed: keep the good data and say why, rather than publishing a shrunken region.
+      else if (old && old.areas.length >= 10 && r.region.areas.length < old.areas.length * 0.6) {
+        regions.push(old)
+        problems.push(`${region.id}: new week has ${r.region.areas.length} areas vs ${old.areas.length} before; kept previous data (parser may need attention)`)
+      }
       else regions.push(r.region)
       console.log(`${region.id}: ${r.region.areas.length} areas, week ${r.region.weekStart}..${r.region.weekEnd}`)
     } else {
@@ -131,7 +158,15 @@ async function main() {
     }
   }
   let adjustments = []
-  try { adjustments = await importAdjustments(td) } catch (e) { problems.push(`adjustments: ${e.message}`); adjustments = prev?.adjustments ?? [] }
+  try { adjustments = await importAdjustments(td) } catch (e) { problems.push(`adjustments: ${e.message}`) }
+  // Zero weeks parsed from a page that used to yield several means the layout changed, not that there are no
+  // adjustments: keep what we had instead of wiping the estimate chain for every user.
+  if (!adjustments.length && prev?.adjustments?.length) { adjustments = prev.adjustments; problems.push('adjustments: none parsed; kept previous weeks') }
+  // Keep older weeks the page no longer lists, so a chain that spans a gap in DOE's listing is not broken.
+  if (prev?.adjustments?.length) {
+    const have = new Set(adjustments.map((a) => a.weekStart))
+    adjustments = [...adjustments, ...prev.adjustments.filter((a) => !have.has(a.weekStart))].sort((a, b) => (a.weekStart < b.weekStart ? 1 : -1)).slice(0, 12)
+  }
   if (adjustments.length) console.log(`adjustments: ${adjustments.map((a) => a.weekStart).join(', ')}`)
 
   if (!regions.length) { console.error('Nothing verified; leaving existing data untouched.\n' + problems.join('\n')); process.exit(1) }
