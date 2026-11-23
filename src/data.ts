@@ -3,15 +3,24 @@ import { addDays, addMonths, uid } from './logic'
 
 export const SCHEMA_VERSION = 2
 
-export const PART_TYPES = [
-  'Battery', 'Front Brake Pads', 'Rear Brake Pads/Shoes', 'Tires', 'Rear Tire', 'Front Tire', 'Alternator', 'Starter Motor',
-  'Spark Plugs', 'Shock Absorbers', 'Suspension Arms', 'Clutch Kit', 'Drive Chain & Sprockets', 'Headlight/Bulbs', 'Wipers',
-  'Radiator/Hoses', 'Belts', 'Other',
-]
+/** Parts both kinds of vehicle have. */
+const PARTS_COMMON = ['Battery', 'Tires', 'Spark Plugs', 'Starter Motor', 'Alternator', 'Belts']
+/** Car-only parts: nothing here exists on a motorcycle (wipers, A/C, suspension arms, radiator hoses and so on). */
+const PARTS_CAR = ['Front Brake Pads', 'Rear Brake Pads/Shoes', 'Shock Absorbers', 'Suspension Arms', 'Clutch Kit', 'Headlight/Bulbs', 'Wipers', 'Radiator/Hoses']
+/** Motorcycle-only parts: chain and sprockets, CVT belt, fork seals and the like. */
+const PARTS_MOTO = ['Front Tire', 'Rear Tire', 'Front Brake Pads', 'Rear Brake Pads/Shoes', 'Drive Chain & Sprockets', 'CVT Belt & Rollers', 'Clutch Kit', 'Shock Absorbers', 'Fork Seals & Oil', 'Headlight/Bulbs']
+
+/** The part types to offer for a vehicle type, so a motorcycle is never asked about wipers and a car never about its chain. */
+export function partTypesFor(type: 'car' | 'motorcycle'): string[] {
+  const list = type === 'motorcycle' ? [...PARTS_COMMON.filter((p) => p !== 'Belts' && p !== 'Alternator'), ...PARTS_MOTO] : [...PARTS_COMMON, ...PARTS_CAR]
+  return [...Array.from(new Set(list)), 'Other']
+}
 export const STORAGE_KEY = 'motogarage-ph'
 
 export const CODING_DAYS: CodingDay[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Exempt']
 export const FUEL_TYPES: FuelType[] = ['Diesel', 'Gasoline', 'Hybrid', 'EV']
+/** Fuel types that exist for each kind of vehicle here: motorcycles run on gasoline (or are electric), never diesel or hybrid. */
+export const fuelTypesFor = (type: 'car' | 'motorcycle'): FuelType[] => (type === 'motorcycle' ? ['Gasoline', 'EV'] : FUEL_TYPES)
 
 interface Tpl { name: string; km?: number; mo?: number }
 

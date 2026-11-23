@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Modal, Field, Toggle, numVal, useOnce } from './ui'
 import { useStore } from './store'
-import { CODING_DAYS, FUEL_TYPES, PART_TYPES } from './data'
+import { VehicleIcon } from './VehicleIcon'
+import { CODING_DAYS, fuelTypesFor, partTypesFor } from './data'
 import { EXPENSE_CATEGORIES, PART_CONDITIONS, type CodingDay, type Expense, type ExpenseCategory, type FuelLog, type FuelType, type MaintItem, type PartCondition, type PartRecord, type ServiceRecord, type Vehicle, type VehicleType } from './types'
 import { peso, todayISO, uid } from './logic'
 import { MONTH_NAMES, codingDayFor, codingIsAuto, nextRenewal } from './plate'
@@ -126,7 +127,7 @@ function LogModal({ initial, editFuel, editExpense, close }: { initial: 'fuel' |
 
 function PartModal({ item, close }: { item?: PartRecord; close: () => void }) {
   const { vehicle, addPart, updatePart } = useStore()
-  const [partType, setPartType] = useState(item?.partType ?? PART_TYPES[0])
+  const [partType, setPartType] = useState(item?.partType ?? partTypesFor(vehicle?.type ?? 'car')[0])
   const [condition, setCondition] = useState<PartCondition>(item?.condition ?? 'Brand New Original')
   const [description, setDescription] = useState(item?.description ?? '')
   const [brand, setBrand] = useState(item?.brand ?? '')
@@ -138,6 +139,9 @@ function PartModal({ item, close }: { item?: PartRecord; close: () => void }) {
   const [warranty, setWarranty] = useState(item?.warrantyMonths ? String(item.warrantyMonths) : '')
   const [notes, setNotes] = useState(item?.notes ?? '')
   if (!vehicle) return null
+  // Offer this vehicle's own parts. A saved part whose type no longer applies stays listed so editing it never loses it.
+  const partChoices = partTypesFor(vehicle.type)
+  if (!partChoices.includes(partType)) partChoices.unshift(partType)
   const claim = useOnce()
   return (
     <Modal title={item ? 'Edit Part Replacement' : 'Add Part Replacement'} onClose={close}>
@@ -156,7 +160,7 @@ function PartModal({ item, close }: { item?: PartRecord; close: () => void }) {
         }}
       >
         <Field label="Part Type *" className="col-span-2">
-          <select className="field" value={partType} onChange={(e) => setPartType(e.target.value)}>{PART_TYPES.map((t) => <option key={t}>{t}</option>)}</select>
+          <select className="field" value={partType} onChange={(e) => setPartType(e.target.value)}>{partChoices.map((t) => <option key={t}>{t}</option>)}</select>
         </Field>
         <Field label="Part Condition *" className="col-span-2">
           <select className="field" value={condition} onChange={(e) => setCondition(e.target.value as PartCondition)}>{PART_CONDITIONS.map((c) => <option key={c}>{c}</option>)}</select>
@@ -313,7 +317,7 @@ function VehicleModal({ item, close, openModal }: { item?: Vehicle; close: () =>
   })()
   const claim = useOnce()
   const autoCoding = codingDayFor(type, plate)
-  const shownCoding = codingManual ? coding : autoCoding
+  const shownCoding: CodingDay = type === 'motorcycle' ? 'Exempt' : codingManual ? coding : autoCoding
   // "Already registered" is stored as the deadline that was paid. It is a switch on the CURRENT deadline: a different
   // plate digit means a different month, so a mark made for the old deadline no longer applies.
   const [registeredFor, setRegisteredFor] = useState(item?.registeredFor ?? '')
@@ -339,8 +343,13 @@ function VehicleModal({ item, close, openModal }: { item?: Vehicle; close: () =>
         {!item && (
           <div className="col-span-2 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
             {(['car', 'motorcycle'] as const).map((t) => (
-              <button key={t} type="button" onClick={() => setType(t)}
-                className={`min-h-11 rounded-lg text-sm font-semibold capitalize ${type === t ? 'on-brand' : 'text-slate-500'}`}>{t}</button>
+              <button key={t} type="button" onClick={() => {
+                setType(t)
+                // A motorcycle has no diesel or hybrid: fall back to gasoline (and drop a grade that no longer fits).
+                if (!fuelTypesFor(t).includes(fuel)) { setFuel('Gasoline'); setPrefProduct(''); setPrefBrand('') }
+              }}
+                aria-pressed={type === t}
+                className={`flex min-h-11 items-center justify-center gap-2 rounded-lg text-sm font-semibold capitalize ${type === t ? 'on-brand' : 'text-slate-500'}`}><VehicleIcon v={{ type: t }} size={18} /> {t}</button>
             ))}
           </div>
         )}
@@ -352,8 +361,8 @@ function VehicleModal({ item, close, openModal }: { item?: Vehicle; close: () =>
         <Field label="Odometer (km)"><input type="number" inputMode="numeric" className="field" value={odo} onChange={(e) => setOdo(e.target.value)} /></Field>
         <Field label="Avg Daily Km"><input type="number" inputMode="numeric" className="field" value={daily} onChange={(e) => setDaily(e.target.value)} /></Field>
         <Field label="Coding Day">
-          <select className="field" value={shownCoding} onChange={(e) => { setCoding(e.target.value as CodingDay); setCodingManual(true) }}>
-            {CODING_DAYS.map((d) => <option key={d} value={d}>{d === 'Exempt' ? 'Exempt / None' : d}</option>)}
+          <select className="field" value={shownCoding} disabled={type === 'motorcycle'} onChange={(e) => { setCoding(e.target.value as CodingDay); setCodingManual(true) }}>
+            {(type === 'motorcycle' ? (['Exempt'] as CodingDay[]) : CODING_DAYS).map((d) => <option key={d} value={d}>{d === 'Exempt' ? 'Exempt / None' : d}</option>)}
           </select>
         </Field>
         <Field label="Fuel Type">
@@ -363,7 +372,7 @@ function VehicleModal({ item, close, openModal }: { item?: Vehicle; close: () =>
             // A grade that does not suit the new fuel type (e.g. RON 95 on a diesel) would be nonsense: clear it.
             if (!productsFor(next).includes(prefProduct as FwProduct)) { setPrefProduct(''); setPrefBrand('') }
           }}>
-            {FUEL_TYPES.map((f) => <option key={f}>{f}</option>)}
+            {fuelTypesFor(type).map((f) => <option key={f}>{f}</option>)}
           </select>
         </Field>
         {grades.length > 0 && (

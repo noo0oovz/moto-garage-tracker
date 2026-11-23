@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { CalendarClock, Car, ChevronRight, Cog, Download, FileSpreadsheet, Fuel, Gauge, RotateCcw, Upload, Wrench } from 'lucide-react'
+import { CalendarClock, ChevronRight, Cog, Download, FileSpreadsheet, Fuel, Gauge, RotateCcw, Upload, Warehouse, Wrench } from 'lucide-react'
 import { useStore } from './store'
 import { Segmented } from './ui'
 import { backupStatus, csvEscape } from './logic'
@@ -101,12 +101,12 @@ export function SettingsPage() {
 }
 
 export function MorePage({ go }: { go: (p: Page) => void }) {
-  const items: { p: Page; icon: typeof Car; title: string; sub: string }[] = [
+  const items: { p: Page; icon: typeof Cog; title: string; sub: string }[] = [
     { p: 'fuelwatch', icon: Gauge, title: 'Fuel Watch', sub: 'PH pump prices by brand, near you' },
     { p: 'fuel', icon: Fuel, title: 'Fuel Logs', sub: 'Fill-ups, litres and km/L' },
     { p: 'history', icon: Wrench, title: 'Service History', sub: 'Timeline of every service' },
     { p: 'parts', icon: Cog, title: 'Parts & Accessories', sub: 'Part records and warranties' },
-    { p: 'vehicles', icon: Car, title: 'Vehicles', sub: 'Add, edit, switch or delete' },
+    { p: 'vehicles', icon: Warehouse, title: 'Vehicles', sub: 'Add, edit, switch or delete' },
     { p: 'settings', icon: CalendarClock, title: 'Settings & Backup', sub: 'Appearance, export, import' },
   ]
   return (

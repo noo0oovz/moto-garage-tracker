@@ -1,4 +1,4 @@
-import { Bike, Car, CheckCircle2, Plus, Upload } from 'lucide-react'
+import { CarFront, CheckCircle2, Motorbike, Plus, Upload } from 'lucide-react'
 import type { Page } from './types'
 
 /**
@@ -11,7 +11,7 @@ export function Welcome({ onAdd, go, page }: { onAdd: () => void; go: (p: Page) 
     <div className="page mx-auto max-w-xl py-4 text-center">
       <div className="card p-6 sm:p-8">
         <div className="mx-auto mb-4 flex w-fit items-center gap-2 rounded-2xl bg-orange-500/15 p-3 text-orange-500" aria-hidden>
-          <Car size={28} /><Bike size={28} />
+          <CarFront size={28} /><Motorbike size={28} />
         </div>
         <h2 className="text-[22px] font-bold tracking-tight">{first ? 'Welcome to MotoGarage PH' : 'Add a vehicle first'}</h2>
         <p className="mt-2 text-sm text-slate-600">

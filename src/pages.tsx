@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Check, Fuel, Gauge, Pencil, Plus, RotateCcw, Trash2, Wallet, Wrench, Car, Bike, TrendingUp } from "lucide-react"
+import { Check, Fuel, Gauge, Pencil, Plus, RotateCcw, Trash2, Wallet, Wrench, TrendingUp } from "lucide-react"
+import { VehicleIcon } from "./VehicleIcon"
 import { useStore } from './store'
 import { Empty, Progress } from './ui'
 import type { ModalState } from './modals'
@@ -214,11 +215,10 @@ export function VehiclesPage({ open }: { open: Open }) {
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {state.vehicles.map((v) => {
           const active = v.id === state.activeVehicleId
-          const Icon = v.type === 'car' ? Car : Bike
           return (
             <article key={v.id} className={`card p-4 ${active ? 'ring-2 ring-orange-500' : ''}`}>
               <div className="flex items-start gap-3">
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-orange-500/15 text-orange-500"><Icon size={22} /></span>
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-orange-500/15 text-orange-500"><VehicleIcon v={v} size={22} /></span>
                 <div className="min-w-0 flex-1">
                   <h3 className="break-words font-bold">{v.nickname}</h3>
                   <p className="break-words text-xs text-slate-500">{v.year} {v.make} {v.model} · {v.plate || 'No plate'}</p>

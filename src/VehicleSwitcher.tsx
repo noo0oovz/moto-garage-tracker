@@ -1,11 +1,9 @@
 import { useState } from 'react'
-import { Bike, Car, Check, ChevronsUpDown, Plus } from 'lucide-react'
+import { Check, ChevronsUpDown, Plus } from 'lucide-react'
+import { VehicleIcon } from './VehicleIcon'
 import { Modal } from './ui'
 import { useStore } from './store'
 import { num } from './logic'
-import type { Vehicle } from './types'
-
-const VehicleIcon = ({ v, size = 20 }: { v: Pick<Vehicle, 'type'>; size?: number }) => (v.type === 'motorcycle' ? <Bike size={size} /> : <Car size={size} />)
 
 /**
  * The active vehicle as a calm card (icon, name, plate, odometer). Tapping it opens a sheet listing every vehicle, so it

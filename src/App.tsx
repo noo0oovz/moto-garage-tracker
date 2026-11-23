@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  Car, Cog, DatabaseBackup, Fuel, Gauge, History, LayoutDashboard, ListChecks, Monitor, MoreHorizontal, Moon, Plus, Receipt, Settings, Sun, Wrench,
+  Cog, DatabaseBackup, Fuel, Gauge, History, LayoutDashboard, ListChecks, Monitor, MoreHorizontal, Moon, Plus, Receipt, Settings, Sun, Warehouse, Wrench,
 } from 'lucide-react'
 import { useStore } from './store'
 import { Modals, type ModalState } from './modals'
@@ -16,7 +16,7 @@ import type { Page } from './types'
 import { backupStatus } from './logic'
 import { THEME_CHOICES } from './theme'
 
-type NavItem = { page: Page; label: string; icon: typeof Car }
+type NavItem = { page: Page; label: string; icon: typeof Cog }
 // Phone bottom bar: four destinations plus the centre quick-log button; the rest live under More.
 const NAV: NavItem[] = [
   { page: 'garage', label: 'Garage', icon: LayoutDashboard },
@@ -33,7 +33,7 @@ const ALL: NavItem[] = [
   { page: 'history', label: 'Service History', icon: History },
   { page: 'parts', label: 'Parts', icon: Cog },
   { page: 'checklist', label: 'Checklist', icon: ListChecks },
-  { page: 'vehicles', label: 'Vehicles', icon: Car },
+  { page: 'vehicles', label: 'Vehicles', icon: Warehouse },
   { page: 'settings', label: 'Settings', icon: Settings },
 ]
 const SHORT_LABEL: Partial<Record<Page, string>> = { fuelwatch: 'Fuel Watch', fuel: 'Fuel Logs', history: 'History', vehicles: 'Vehicles' }
