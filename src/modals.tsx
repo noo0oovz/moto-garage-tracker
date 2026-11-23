@@ -4,7 +4,7 @@ import { useStore } from './store'
 import { VehicleIcon } from './VehicleIcon'
 import { PhotoField } from './PhotoField'
 import { CODING_DAYS, fuelTypesFor, partTypesFor } from './data'
-import { EXPENSE_CATEGORIES, PART_CONDITIONS, type CodingDay, type Expense, type ExpenseCategory, type FuelLog, type FuelType, type MaintItem, type PartCondition, type PartRecord, type ServiceRecord, type Vehicle, type VehicleType } from './types'
+import { EXPENSE_CATEGORIES, PART_CONDITIONS, type CodingDay, type Expense, type ExpenseCategory, type FuelLog, type FuelType, type MaintItem, type PartCondition, type PartRecord, type PhotoView, type ServiceRecord, type Vehicle, type VehicleType } from './types'
 import { peso, todayISO, uid } from './logic'
 import { MONTH_NAMES, codingDayFor, codingIsAuto, nextRenewal } from './plate'
 import { useFuelData } from './useFuelData'
@@ -292,6 +292,7 @@ function MaintModal({ item, close }: { item?: MaintItem; close: () => void }) {
 function VehicleModal({ item, close, openModal }: { item?: Vehicle; close: () => void; openModal: (m: ModalState) => void }) {
   const { saveVehicle, state } = useStore()
   const [photo, setPhoto] = useState<string | undefined>(item?.photo)
+  const [photoView, setPhotoView] = useState<PhotoView | undefined>(item?.photoView)
   // A new vehicle gets its id here, so the setup dialog can open for it the moment it is saved.
   const [newId] = useState(() => item?.id ?? uid())
   const [type, setType] = useState<VehicleType>(item?.type ?? 'car')
@@ -336,7 +337,7 @@ function VehicleModal({ item, close, openModal }: { item?: Vehicle; close: () =>
             // Start from the saved vehicle so anything this form does not edit (bike type, gearbox, engine size, driving
             // conditions) is kept. Listing only the form's own fields used to erase them on every edit.
             ...(item ?? {}),
-            id: newId, type, photo, nickname: nickname.trim() || `${make} ${model}`.trim() || 'My Vehicle', make, model,
+            id: newId, type, photo, photoView: photo ? photoView : undefined, nickname: nickname.trim() || `${make} ${model}`.trim() || 'My Vehicle', make, model,
             year: numVal(year), plate, odometer: numVal(odo), avgDailyKm: numVal(daily), codingDay: shownCoding, fuelType: fuel,
             preferredFuel: prefBrand && isProduct(prefProduct) && grades.includes(prefProduct) ? { brand: prefBrand, product: prefProduct } : undefined,
             // Keep only a mark that still matches this plate's current deadline.
@@ -360,7 +361,7 @@ function VehicleModal({ item, close, openModal }: { item?: Vehicle; close: () =>
           </div>
         )}
         <Field label="Nickname" className="col-span-2"><input className="field" maxLength={40} value={nickname} onChange={(e) => setNickname(e.target.value)} /></Field>
-        <PhotoField value={photo} onChange={setPhoto} stored={JSON.stringify(state)} />
+        <PhotoField value={photo} view={photoView} onChange={setPhoto} onView={setPhotoView} stored={JSON.stringify(state)} />
         <Field label="Make"><input className="field" value={make} onChange={(e) => setMake(e.target.value)} /></Field>
         <Field label="Model"><input className="field" value={model} onChange={(e) => setModel(e.target.value)} /></Field>
         <Field label="Year"><input type="number" inputMode="numeric" className="field" value={year} onChange={(e) => setYear(e.target.value)} /></Field>

@@ -66,3 +66,63 @@ export async function processPhoto(file: File): Promise<PhotoResult> {
 export function storageHeadroom(current: string, limit = 5_000_000): number {
   return Math.max(0, limit - current.length)
 }
+
+// ---- Framing: which part of the photo shows, and how far it is zoomed -----------------------------------------------
+import type { PhotoView } from './types'
+
+export const ZOOM_MIN = 1
+export const ZOOM_MAX = 3
+/** Less movement than this, in pixels, is not worth offering. */
+export const MIN_TRAVEL = 4
+export const DEFAULT_VIEW: PhotoView = { x: 50, y: 50, zoom: 1 }
+
+const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n))
+const num = (n: unknown, fallback: number) => (typeof n === 'number' && Number.isFinite(n) ? n : fallback)
+const round2 = (n: number) => Math.round(n * 100) / 100
+
+/** Make any value into a safe view. Unusable parts fall back to the centre / no zoom, and the default view is "no view". */
+export function cleanView(v: unknown): PhotoView | undefined {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined
+  const o = v as Record<string, unknown>
+  const view = { x: round2(clamp(num(o.x, 50), 0, 100)), y: round2(clamp(num(o.y, 50), 0, 100)), zoom: round2(clamp(num(o.zoom, 1), ZOOM_MIN, ZOOM_MAX)) }
+  return view.x === 50 && view.y === 50 && view.zoom === 1 ? undefined : view
+}
+
+/**
+ * The CSS that draws a photo with a view, shared by the editor and every place the photo is shown, so what you frame is
+ * exactly what you see. The photo sits in a box `zoom` times the frame, slid by the view; inside it the picture covers
+ * the box and is positioned by the same x and y. Percentages only, so it holds at any frame size.
+ */
+export function frameLayout(view: PhotoView | undefined) {
+  const v = cleanView(view) ?? DEFAULT_VIEW
+  const extra = v.zoom - 1
+  return {
+    inner: { width: `${round2(v.zoom * 100)}%`, height: `${round2(v.zoom * 100)}%`, left: `${round2(-extra * v.x)}%`, top: `${round2(-extra * v.y)}%` },
+    objectPosition: `${v.x}% ${v.y}%`,
+  }
+}
+
+/**
+ * How many pixels the picture can travel in each direction inside a frame of cw x ch, for a picture of iw x ih at this
+ * zoom. Zero means there is nothing to move (the picture exactly fits and is not zoomed).
+ */
+export function panRange(cw: number, ch: number, iw: number, ih: number, zoom: number): { x: number; y: number } {
+  if (![cw, ch, iw, ih].every((n) => Number.isFinite(n) && n > 0)) return { x: 0, y: 0 }
+  const z = clamp(num(zoom, 1), ZOOM_MIN, ZOOM_MAX)
+  const s = Math.max(cw / iw, ch / ih) // scale at which the picture just covers the frame
+  // Whole-pixel frame sizes make a picture of exactly the frame's shape look a pixel or two too big. Anything under
+  // MIN_TRAVEL px is "nothing to move", so the editor never offers a drag that would do nothing.
+  const snap = (n: number) => (n < MIN_TRAVEL ? 0 : n)
+  return { x: snap((z - 1) * cw + z * Math.max(0, iw * s - cw)), y: snap((z - 1) * ch + z * Math.max(0, ih * s - ch)) }
+}
+
+/** Move a view by a drag of (dx, dy) pixels: dragging the picture right shows more of its left side. */
+export function dragView(start: PhotoView, dx: number, dy: number, range: { x: number; y: number }): PhotoView {
+  const move = (p: number, d: number, r: number) => (r > 0 && Number.isFinite(d) ? clamp(p - (d / r) * 100, 0, 100) : p)
+  return { ...start, x: round2(move(start.x, dx, range.x)), y: round2(move(start.y, dy, range.y)) }
+}
+
+/** Nudge a view by a percentage of its travel, for the keyboard. */
+export function nudgeView(view: PhotoView, dx: number, dy: number): PhotoView {
+  return { ...view, x: round2(clamp(view.x + dx, 0, 100)), y: round2(clamp(view.y + dy, 0, 100)) }
+}

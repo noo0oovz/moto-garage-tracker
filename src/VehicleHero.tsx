@@ -1,6 +1,7 @@
 import { CalendarClock, CheckCircle2, MapPin, ShieldAlert, ShieldCheck, type LucideIcon } from 'lucide-react'
 import type { Vehicle } from './types'
 import { artKind, VehicleArt } from './VehicleArt'
+import { FramedPhoto } from './FramedPhoto'
 import { codingStatus, num, todayISO } from './logic'
 import { MONTH_NAMES, nextRenewal, reminderLevel } from './plate'
 import type { ModalState } from './modals'
@@ -75,9 +76,8 @@ export function VehicleHero({ v, open, save, go }: {
       </div>
       <div className="px-5 pb-1 pt-2 md:col-start-2 md:row-span-3 md:row-start-1 md:p-6" style={{ color: 'var(--brand)' }}>
         {v.photo ? (
-          // the owner's own picture, in place of the drawing; cropped to a fixed shape so every vehicle lines up
-          <img src={v.photo} alt={`Photo of ${v.nickname}`} className="mx-auto block aspect-[16/10] w-full max-w-[420px] object-cover"
-            style={{ borderRadius: 'var(--r-ctl)', border: '1px solid var(--hairline)' }} />
+          // the owner's own picture, framed the way they chose; the same shape every vehicle uses so they line up
+          <FramedPhoto src={v.photo} view={v.photoView} alt={`Photo of ${v.nickname}`} className="mx-auto max-w-[420px]" style={{ borderRadius: 'var(--r-ctl)', border: '1px solid var(--hairline)' }} />
         ) : (
           <div className="relative mx-auto max-w-[340px]">
             <VehicleArt kind={kind} className="block h-auto w-full" style={{ ['--art-cut' as string]: 'var(--surface)' }} />

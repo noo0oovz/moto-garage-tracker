@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Check, Fuel, Gauge, Pencil, Plus, RotateCcw, Trash2, Wallet, Wrench, TrendingUp } from "lucide-react"
 import { artKind, VehicleArt } from "./VehicleArt"
+import { FramedPhoto } from "./FramedPhoto"
 import { subtitle } from "./VehicleHero"
 import { useStore } from './store'
 import { Empty, Pill, Progress } from './ui'
@@ -232,7 +233,7 @@ export function VehiclesPage({ open }: { open: Open }) {
                   <Pill tone={tone}>{healthText}</Pill>
                 </div>
                 {v.photo ? (
-                  <img src={v.photo} alt={`Photo of ${v.nickname}`} className="mx-auto mt-2 block aspect-[16/10] w-full object-cover" style={{ borderRadius: 'var(--r-ctl)', border: '1px solid var(--hairline)' }} />
+                  <FramedPhoto src={v.photo} view={v.photoView} alt={`Photo of ${v.nickname}`} className="mt-2" style={{ borderRadius: 'var(--r-ctl)', border: '1px solid var(--hairline)' }} />
                 ) : (
                   <div className="mx-auto mt-2 max-w-[220px]" style={{ color: 'var(--brand)' }}>
                     <VehicleArt kind={artKind(v)} className="block h-auto w-full" style={{ ['--art-cut' as string]: 'var(--surface)' }} />

@@ -3,7 +3,7 @@ import { EXPENSE_CATEGORIES, PART_CONDITIONS } from './types'
 import { SCHEMA_VERSION } from './data'
 import { isISODate } from './logic'
 import { isProduct } from './pricing'
-import { isPhoto } from './photo'
+import { cleanView, isPhoto } from './photo'
 import { GUIDE } from './intervals'
 
 const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x)
@@ -56,6 +56,8 @@ export function migrate(raw: unknown, now = new Date(), today = now.toISOString(
         ? { brand: v.preferredFuel.brand, product: v.preferredFuel.product } : undefined,
       registeredFor: isISODate(v.registeredFor) ? v.registeredFor : undefined,
       photo: isPhoto(v.photo) ? v.photo : undefined,
+      // a framing means nothing without its photo
+      photoView: isPhoto(v.photo) ? cleanView(v.photoView) : undefined,
       // Only motorcycles have a bike type; anything unrecognised is left unset and the engine size decides instead.
       bikeType: v.type === 'motorcycle' && typeof v.bikeType === 'string' && (BIKE_TYPES as readonly string[]).includes(v.bikeType) ? (v.bikeType as (typeof BIKE_TYPES)[number]) : undefined,
       transmission: typeof v.transmission === 'string' && (TRANSMISSIONS as readonly string[]).includes(v.transmission) ? (v.transmission as (typeof TRANSMISSIONS)[number]) : undefined,

@@ -25,6 +25,8 @@ export interface Vehicle {
   transmission?: Transmission
   /** A picture of the vehicle, as a small JPEG data URL (see photo.ts). Shown in the Garage instead of the drawing. */
   photo?: string
+  /** How the photo is framed: which part of it shows and how far it is zoomed. Absent means centred, no zoom. */
+  photoView?: PhotoView
   /** The kind of motorcycle (motorcycles only). Decides which maintenance schedule applies. */
   bikeType?: BikeType
   /** Engine size in cc (motorcycles): picks the maintenance class, from small scooters up to big bikes. */
@@ -35,6 +37,8 @@ export interface Vehicle {
 
 /** What kind of motorcycle: picks its maintenance schedule. Scooter = twist-and-go; small = up to about 150cc with gears; mid = about 200-400cc; big = over 400cc. */
 export type BikeType = 'scooter' | 'small' | 'mid' | 'big'
+/** x and y are 0-100 (0 = show the left/top edge, 100 = the right/bottom edge); zoom is 1 (fit the frame) up to 3. */
+export interface PhotoView { x: number; y: number; zoom: number }
 export type Transmission = 'manual' | 'automatic' | 'cvt' | 'dct'
 export interface DrivingConditions {
   heavyTraffic?: boolean
