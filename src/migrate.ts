@@ -7,10 +7,13 @@ import { GUIDE } from './intervals'
 
 const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x)
 const str = (x: unknown, d = '') => (typeof x === 'string' ? x : typeof x === 'number' && Number.isFinite(x) ? String(x) : d)
+/** Largest value accepted for any stored number (a billion: far beyond a real odometer, cost or tank). Same as the forms' limit in ui.tsx. */
+const MAX_VALUE = 1e9
 /** A finite number, or the fallback. Rejects NaN/Infinity/"12abc"; accepts numeric strings such as "12.5". */
 const nz = (x: unknown, d = 0) => {
   const n = typeof x === 'number' ? x : typeof x === 'string' && x.trim() !== '' ? Number(x) : NaN
-  return Number.isFinite(n) ? n : d
+  // Finite AND sane: values near the float limit are corrupt data, and a few of them added together overflow to Infinity.
+  return Number.isFinite(n) && Math.abs(n) <= MAX_VALUE ? n : d
 }
 const opt = (x: unknown) => { const n = nz(x, NaN); return Number.isFinite(n) ? n : undefined }
 const date = (x: unknown, d: string) => (isISODate(x) ? x : d)

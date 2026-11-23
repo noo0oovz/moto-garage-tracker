@@ -69,7 +69,7 @@ export function LogsPage({ open }: { open: Open }) {
           <ul className="space-y-3">
             {Object.entries(sum.byCat).sort((a, b) => b[1] - a[1]).map(([c, v]) => (
               <li key={c}>
-                <div className="mb-1 flex justify-between text-xs"><span>{c}</span><span className="font-semibold">{peso(v)} · {Math.round((v / sum.all) * 100)}%</span></div>
+                <div className="mb-1 flex justify-between text-xs"><span>{c}</span><span className="font-semibold">{peso(v)} · {(sum.all > 0 ? Math.round((v / sum.all) * 100) : 0)}%</span></div>
                 <Progress pct={(v / max) * 100} className="bg-orange-500" />
               </li>
             ))}

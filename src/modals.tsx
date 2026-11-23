@@ -344,11 +344,11 @@ function VehicleModal({ item, close, openModal }: { item?: Vehicle; close: () =>
             ))}
           </div>
         )}
-        <Field label="Nickname" className="col-span-2"><input className="field" value={nickname} onChange={(e) => setNickname(e.target.value)} /></Field>
+        <Field label="Nickname" className="col-span-2"><input className="field" maxLength={40} value={nickname} onChange={(e) => setNickname(e.target.value)} /></Field>
         <Field label="Make"><input className="field" value={make} onChange={(e) => setMake(e.target.value)} /></Field>
         <Field label="Model"><input className="field" value={model} onChange={(e) => setModel(e.target.value)} /></Field>
         <Field label="Year"><input type="number" inputMode="numeric" className="field" value={year} onChange={(e) => setYear(e.target.value)} /></Field>
-        <Field label="Plate Number"><input className="field uppercase" value={plate} onChange={(e) => setPlate(e.target.value)} autoCapitalize="characters" autoComplete="off" /></Field>
+        <Field label="Plate Number"><input className="field uppercase" maxLength={12} value={plate} onChange={(e) => setPlate(e.target.value)} autoCapitalize="characters" autoComplete="off" /></Field>
         <Field label="Odometer (km)"><input type="number" inputMode="numeric" className="field" value={odo} onChange={(e) => setOdo(e.target.value)} /></Field>
         <Field label="Avg Daily Km"><input type="number" inputMode="numeric" className="field" value={daily} onChange={(e) => setDaily(e.target.value)} /></Field>
         <Field label="Coding Day">

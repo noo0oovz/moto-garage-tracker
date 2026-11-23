@@ -585,3 +585,24 @@ describe('backup reminder only matters once there is data', () => {
     expect(buildEmptyState().vehicles.length).toBe(0)
   })
 })
+
+describe('absurd numbers', () => {
+  it('import replaces values near the float limit, so totals can never overflow to Infinity', () => {
+    const s = buildDemoState('2026-06-01')
+    s.fuel = s.fuel.map((f) => ({ ...f, liters: 1e308, totalCost: 1e308, pricePerLiter: 1e308 }))
+    const r = migrate(JSON.parse(JSON.stringify(s)))!
+    const total = r.fuel.reduce((t, f) => t + f.totalCost, 0)
+    expect(Number.isFinite(total)).toBe(true)
+    expect(r.fuel.every((f) => f.liters <= 1e9 && f.totalCost <= 1e9)).toBe(true)
+  })
+
+  it('forms treat blank, text and oversized input as 0, so Save stays disabled', async () => {
+    const { numVal, MAX_VALUE } = await import('./ui')
+    expect(numVal('')).toBe(0)
+    expect(numVal('abc')).toBe(0)
+    expect(numVal('1e308')).toBe(0)
+    expect(numVal('99999999999999')).toBe(0)
+    expect(numVal(String(MAX_VALUE))).toBe(MAX_VALUE)
+    expect(numVal('1500.50')).toBe(1500.5)
+  })
+})

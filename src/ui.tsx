@@ -143,9 +143,12 @@ export function Segmented<T extends string>({ value, onChange, options, label, c
   )
 }
 
+/** Largest number a form accepts. Matches the import limit in migrate.ts, so what you can type is what can be loaded back. */
+export const MAX_VALUE = 1e9
+/** Parses a typed number. Blank, non-numeric and absurdly large input all count as 0, so the form stays invalid instead of saving junk. */
 export const numVal = (s: string) => {
   const n = parseFloat(s)
-  return Number.isFinite(n) ? n : 0
+  return Number.isFinite(n) && Math.abs(n) <= MAX_VALUE ? n : 0
 }
 
 /**
