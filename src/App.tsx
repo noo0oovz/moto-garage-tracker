@@ -10,6 +10,7 @@ import { MorePage, SettingsPage } from './SettingsPages'
 import { FuelPage, HistoryPage, PartsPage } from './pages2'
 import { FuelWatchPage } from './FuelWatch'
 import { Welcome } from './Welcome'
+import { BrandMark } from './BrandMark'
 import { VehicleSwitcher } from './VehicleSwitcher'
 import { useLayout } from './useLayout'
 import type { Page } from './types'
@@ -91,9 +92,7 @@ export default function App() {
   const themeButton = (cls: string) => (
     <button onClick={cycleTheme} aria-label={themeLabel} title={themeLabel} className={cls} style={{ color: 'var(--text-2)' }}><ThemeIcon size={18} /></button>
   )
-  const brandMark = (size: number) => (
-    <span className="grid shrink-0 place-items-center rounded-[10px]" style={{ width: size, height: size, background: 'var(--brand)', color: 'var(--brand-on)' }}><Wrench size={size * 0.5} /></span>
-  )
+  const brandMark = (size: number) => <BrandMark size={size} />
   // Neutral navigation: only the active item carries the brand colour.
   const navClass = (active: boolean) => `transition ${active ? '' : 'hover:bg-[var(--surface-2)]'}`
   const navStyle = (active: boolean) => (active ? { background: 'var(--brand-bg)', color: 'var(--brand)' } : { color: 'var(--text-2)' })

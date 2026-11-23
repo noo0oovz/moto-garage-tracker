@@ -88,3 +88,43 @@ describe('the CSS and the token file agree (no drift)', () => {
     expect(css).toContain('prefers-reduced-motion')
   })
 })
+
+describe('app logo', () => {
+  const read = (f: string) => fs.readFileSync(f, 'utf8')
+  const svg = read('public/favicon.svg')
+  const manifest = JSON.parse(read('public/manifest.webmanifest'))
+
+  it('the favicon uses the brand teal, not the old orange', () => {
+    expect(svg.toLowerCase()).toContain(LIGHT.brand.toLowerCase())
+    expect(svg.toLowerCase()).not.toContain('#f97316')
+  })
+
+  it('the in-app mark draws the same artwork as the favicon', () => {
+    const mark = read('src/BrandMark.tsx')
+    // the same path data, so the two cannot drift apart
+    for (const d of svg.match(/d="[^"]+"/g) ?? []) expect(mark, d).toContain(d)
+    expect(mark).toContain('cx="32" cy="40" r="9"')
+  })
+
+  it('the manifest lists any-purpose and maskable icons that exist, and uses theme colours', () => {
+    const purposes = manifest.icons.map((i: { purpose: string }) => i.purpose)
+    expect(purposes).toContain('any')
+    expect(purposes).toContain('maskable')
+    for (const i of manifest.icons) expect(fs.existsSync(`public/${i.src}`), i.src).toBe(true)
+    expect(manifest.theme_color.toLowerCase()).toBe(LIGHT.canvas.toLowerCase())
+    expect(manifest.background_color.toLowerCase()).toBe(LIGHT.canvas.toLowerCase())
+  })
+
+  it('the Apple touch icon is its own file and exists', () => {
+    expect(read('index.html')).toContain('apple-touch-icon.png')
+    expect(fs.existsSync('public/apple-touch-icon.png')).toBe(true)
+  })
+
+  it('the PNG icons are real PNGs of the stated sizes', () => {
+    const size = (f: string) => { const b = fs.readFileSync(f); return [b.readUInt32BE(16), b.readUInt32BE(20), b.toString('ascii', 1, 4)] }
+    expect(size('public/icon-512.png')).toEqual([512, 512, 'PNG'])
+    expect(size('public/icon-192.png')).toEqual([192, 192, 'PNG'])
+    expect(size('public/icon-maskable-512.png')).toEqual([512, 512, 'PNG'])
+    expect(size('public/apple-touch-icon.png')).toEqual([180, 180, 'PNG'])
+  })
+})
