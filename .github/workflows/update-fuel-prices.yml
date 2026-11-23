@@ -1,10 +1,12 @@
 name: Update fuel prices
 
 # Companies announce each week's price change the Monday before it takes effect (DOE posts the summary that day),
-# and the area reports follow during the week. Checking every other day keeps "Est. now" at most a day or two behind.
+# and each region's area report follows later in the week, on different days. DOE publishes weekly, so this runs
+# weekly: Monday for the new price changes, then Wednesday and Friday to pick up the regional reports as they appear.
+# A run where DOE has posted nothing new changes nothing and commits nothing.
 on:
   schedule:
-    - cron: '30 2 */2 * *' # 10:30 PH time, on odd-numbered days of the month (1st, 3rd, 5th, ...)
+    - cron: '30 2 * * 1,3,5' # 10:30 PH time every Monday, Wednesday and Friday
   workflow_dispatch:
 
 permissions:
