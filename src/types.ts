@@ -23,6 +23,8 @@ export interface Vehicle {
   registeredFor?: string
   /** Manual, automatic, CVT or dual-clutch: changes which transmission fluid and how often. Cars (and some bikes). */
   transmission?: Transmission
+  /** A picture of the vehicle, as a small JPEG data URL (see photo.ts). Shown in the Garage instead of the drawing. */
+  photo?: string
   /** The kind of motorcycle (motorcycles only). Decides which maintenance schedule applies. */
   bikeType?: BikeType
   /** Engine size in cc (motorcycles): picks the maintenance class, from small scooters up to big bikes. */

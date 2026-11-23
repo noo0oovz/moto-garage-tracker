@@ -27,6 +27,8 @@ export interface ServicePayload {
 
 interface Store {
   state: AppState
+  /** True while the browser is refusing to save (storage full or blocked): changes would be lost on reload. */
+  saveError: boolean
   vehicle: Vehicle | undefined
   setActive: (id: string) => void
   setTheme: (t: ThemeMode) => void
@@ -61,6 +63,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Another tab changed the data: adopt it, so this tab never overwrites that work with a stale copy. The `storage`
   // event is only delivered to OTHER tabs, so our own writes cannot loop back here.
   const lastWritten = useRef<string | null>(null)
+  const [saveError, setSaveError] = useState(false)
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (e.key !== STORAGE_KEY || e.newValue === null || e.newValue === lastWritten.current) return
@@ -78,7 +81,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const json = JSON.stringify(state)
       // Skip the write when this state came from the other tab (it is already stored).
       if (json !== lastWritten.current) { localStorage.setItem(STORAGE_KEY, json); lastWritten.current = json }
-    } catch { /* quota/private mode */ }
+      setSaveError(false)
+    } catch {
+      // Storage full or blocked (private mode). The app keeps working in memory, but say so: otherwise the owner would
+      // think a change was saved when it will be gone after a reload.
+      setSaveError(true)
+    }
   }, [state])
 
   // Apply the theme. 'system' follows the device and keeps following it while the app is open (e.g. at sunset).
@@ -101,7 +109,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const bumpOdo = (vehicles: Vehicle[], id: string, odo?: number) =>
     odo ? vehicles.map((v) => (v.id === id && odo > v.odometer ? { ...v, odometer: odo } : v)) : vehicles
 
-  const api = useMemo<Omit<Store, 'state' | 'vehicle'>>(() => ({
+  const api = useMemo<Omit<Store, 'state' | 'vehicle' | 'saveError'>>(() => ({
     setActive: (id) => setState((s) => ({ ...s, activeVehicleId: id })),
     setTheme: (theme) => setState((s) => ({ ...s, theme })),
     saveVehicle: (v) => setState((s) => {
@@ -227,7 +235,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const setActive = useCallback(api.setActive, [api])
   const vehicle = state.vehicles.find((v) => v.id === state.activeVehicleId) ?? state.vehicles[0]
-  const value = useMemo(() => ({ ...api, setActive, state, vehicle }), [api, setActive, state, vehicle])
+  const value = useMemo(() => ({ ...api, setActive, state, vehicle, saveError }), [api, setActive, state, vehicle, saveError])
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }
 

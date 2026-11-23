@@ -47,7 +47,7 @@ const COMPACT_TITLES: Partial<Record<Page, string>> = { logs: 'Logs', checklist:
 const MORE_PAGES: Page[] = ['vehicles', 'settings', 'fuel', 'history', 'parts', 'fuelwatch']
 
 export default function App() {
-  const { state, vehicle, setTheme } = useStore()
+  const { state, vehicle, setTheme, saveError } = useStore()
   const layout = useLayout()
   const [page, setPage] = useState<Page>('garage')
   const [modal, setModal] = useState<ModalState>(null)
@@ -78,6 +78,15 @@ export default function App() {
   const compact = layout === 'compact'
 
   // Nothing to lose until the user has added a vehicle, so an empty garage never nags about backups.
+  // Shown on every page while the browser refuses to save: a change would look done and then be gone after a reload.
+  const saveBanner = saveError && (
+    <div role="alert" className="mx-auto mt-3 flex w-[calc(100%-2rem)] max-w-7xl items-center gap-3 px-4 py-3 text-sm md:w-[calc(100%-3rem)]"
+      style={{ background: 'var(--over-bg)', color: 'var(--over)', borderRadius: 'var(--r-card)' }}>
+      <DatabaseBackup size={18} className="shrink-0" />
+      <span className="min-w-0 flex-1"><b>Your changes are not being saved.</b> This browser’s storage is full or blocked. Export a backup now so you do not lose your data.</span>
+      <button className="btn-ghost !min-h-11 shrink-0" style={{ color: 'inherit' }} onClick={() => go('settings')}>Back up</button>
+    </div>
+  )
   const backupBanner = backup.due && !empty && page !== 'settings' && (
     <div role="status" className="mx-auto mt-3 flex w-[calc(100%-2rem)] max-w-7xl items-center gap-3 px-4 py-3 text-sm md:w-[calc(100%-3rem)]"
       style={{ background: 'var(--soon-bg)', color: 'var(--soon)', borderRadius: 'var(--r-card)' }}>
@@ -176,6 +185,7 @@ export default function App() {
           </header>
         )}
 
+        {saveBanner}
         {backupBanner}
         <main ref={mainRef} className={`mx-auto w-full max-w-7xl px-4 pt-5 md:px-6 ${phone ? 'pb-28' : 'pb-10 md:pt-6'}`}
           style={{ paddingRight: 'max(1rem, env(safe-area-inset-right))' }}>

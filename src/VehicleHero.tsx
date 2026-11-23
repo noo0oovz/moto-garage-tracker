@@ -74,11 +74,17 @@ export function VehicleHero({ v, open, save, go }: {
         <p className="num mt-0.5 text-[15px]" style={{ color: 'var(--text-2)' }}>{subtitle(v)}</p>
       </div>
       <div className="px-5 pb-1 pt-2 md:col-start-2 md:row-span-3 md:row-start-1 md:p-6" style={{ color: 'var(--brand)' }}>
-        <div className="relative mx-auto max-w-[340px]">
-          <VehicleArt kind={kind} className="block h-auto w-full" style={{ ['--art-cut' as string]: 'var(--surface)' }} />
-          {/* a thin floor line under the wheels, so the illustration feels placed rather than floating */}
-          <div className="absolute inset-x-6 bottom-0 h-px" style={{ background: 'var(--hairline)' }} aria-hidden />
-        </div>
+        {v.photo ? (
+          // the owner's own picture, in place of the drawing; cropped to a fixed shape so every vehicle lines up
+          <img src={v.photo} alt={`Photo of ${v.nickname}`} className="mx-auto block aspect-[16/10] w-full max-w-[420px] object-cover"
+            style={{ borderRadius: 'var(--r-ctl)', border: '1px solid var(--hairline)' }} />
+        ) : (
+          <div className="relative mx-auto max-w-[340px]">
+            <VehicleArt kind={kind} className="block h-auto w-full" style={{ ['--art-cut' as string]: 'var(--surface)' }} />
+            {/* a thin floor line under the wheels, so the illustration feels placed rather than floating */}
+            <div className="absolute inset-x-6 bottom-0 h-px" style={{ background: 'var(--hairline)' }} aria-hidden />
+          </div>
+        )}
       </div>
       <dl className="num mx-5 mt-2 grid grid-cols-2 gap-px overflow-hidden text-center md:col-start-1 md:row-start-2" style={{ background: 'var(--hairline)', borderRadius: 'var(--r-ctl)' }}>
         <div className="px-3 py-2" style={{ background: 'var(--surface-2)' }}>
