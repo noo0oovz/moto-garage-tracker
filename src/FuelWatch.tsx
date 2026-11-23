@@ -1,15 +1,15 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useFuelData } from './useFuelData'
 import { ExternalLink, Fuel, Info, LocateFixed, MapPin, RefreshCw, Search, TriangleAlert, X } from 'lucide-react'
 import { Empty } from './ui'
 import { useStore } from './store'
 import { fmtDate, peso } from './logic'
 import {
-  FW_PRODUCTS, areaKey as makeKey, brandRows, estimateAt, freshness, latestAdjustmentWeek, nearestAreas, parseFuelData, placeLabel,
+  FW_PRODUCTS, areaKey as makeKey, brandPrice, brandRows, brandsFor, isProduct, productsFor, estimateAt, freshness, latestAdjustmentWeek, nearestAreas, placeLabel,
   nearbyFallback, productGroup, projectPrice, searchAreas, typicalCurrent,
   type FwArea, type FwData, type FwProduct, type FwRegion,
 } from './pricing'
 
-const DATA_URL = `${import.meta.env.BASE_URL}fuel-prices.json`
 const DOE_URL = 'https://doe.gov.ph/data-and-prices/liquid-fuels/retail-pump-prices'
 const MAX_NEAR_KM = 60
 const LS_AREA = 'motogarage-fw-area'
@@ -36,27 +36,6 @@ const titleCase = (s: string) => s.replace(/\w\S*/g, (w) => w[0] + w.slice(1).to
 // "−₱3.80" / "+₱3.50": the sign goes before the peso sign, with a real minus.
 const signed = (n: number) => `${n < 0 ? '−' : '+'}${peso(Math.abs(n), 2)}`
 const range = (lo: number, hi: number) => (lo === hi ? peso(lo, 2) : `${peso(lo, 2)} – ${peso(hi, 2)}`)
-
-function useFuelData() {
-  const [data, setData] = useState<FwData | null>(null)
-  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
-  const [tick, setTick] = useState(0)
-  useEffect(() => {
-    let live = true
-    setState('loading')
-    fetch(`${DATA_URL}?t=${Math.floor(Date.now() / 3600000)}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((j) => {
-        const d = parseFuelData(j)
-        if (!live) return
-        if (!d || !d.regions.length) setState('error')
-        else { setData(d); setState('ready') }
-      })
-      .catch(() => live && setState('error'))
-    return () => { live = false }
-  }, [tick])
-  return { data, state, reload: () => setTick((t) => t + 1) }
-}
 
 function FreshBadge({ region }: { region: FwRegion }) {
   const f = freshness(region.weekEnd)
@@ -200,17 +179,43 @@ function BrowseAreas({ data, value, onPick }: { data: FwData; value: string; onP
   )
 }
 
+/** A one-tap way to set a vehicle's preferred brand from Fuel Watch, shown only while none is set. */
+function SetPreferred({ data, vehicleName, fuelType, product, onSave }: { data: FwData; vehicleName: string; fuelType: string; product: FwProduct; onSave: (brand: string, product: FwProduct) => void }) {
+  const [brand, setBrand] = useState('')
+  const ok = productsFor(fuelType).includes(product)
+  const brands = brandsFor(data, product).filter((b) => b !== 'INDEPENDENT')
+  if (!ok || !brands.length) return null
+  return (
+    <div className="mt-3 flex flex-wrap items-end gap-2 rounded-lg bg-black/25 p-2 text-sm">
+      <label className="min-w-0 flex-1">
+        <span className="mb-1 block text-xs opacity-90">Show my brand’s {titleCase(product)} price for {vehicleName}</span>
+        <select className="field !bg-white/95 text-slate-900" value={brand} onChange={(e) => setBrand(e.target.value)} aria-label="Preferred brand">
+          <option value="">Choose a brand…</option>
+          {brands.map((b) => <option key={b} value={b}>{titleCase(b)}</option>)}
+        </select>
+      </label>
+      <button className="btn bg-white/25 text-white hover:bg-white/35" disabled={!brand} onClick={() => onSave(brand, product)}>Save</button>
+    </div>
+  )
+}
+
 export function FuelWatchPage() {
-  const { vehicle } = useStore()
+  const { vehicle, saveVehicle } = useStore()
   const { data, state, reload } = useFuelData()
-  const defaultProduct: FwProduct = vehicle?.fuelType === 'Diesel' ? 'DIESEL' : 'RON 95'
-  const [product, setProduct] = useState<FwProduct>(() => (FW_PRODUCTS as readonly string[]).includes(ls(LS_PRODUCT) ?? '') ? (ls(LS_PRODUCT) as FwProduct) : defaultProduct)
+  const pref = vehicle?.preferredFuel && isProduct(vehicle.preferredFuel.product) ? (vehicle.preferredFuel as { brand: string; product: FwProduct }) : null
+  const defaultProduct: FwProduct = pref?.product ?? (vehicle?.fuelType === 'Diesel' ? 'DIESEL' : 'RON 95')
+  // A remembered tab is only a sensible start when it suits this vehicle (a gasoline vehicle should not open on Diesel).
+  const remembered = (FW_PRODUCTS as readonly string[]).includes(ls(LS_PRODUCT) ?? '') ? (ls(LS_PRODUCT) as FwProduct) : null
+  const suits = (p: FwProduct | null) => !!p && (!vehicle || vehicle.fuelType === 'EV' || productsFor(vehicle.fuelType).includes(p) || p === 'KEROSENE')
+  const startProduct: FwProduct = pref ? pref.product : remembered && suits(remembered) ? remembered : defaultProduct
+  const [product, setProduct] = useState<FwProduct>(startProduct)
   const [areaKey, setAreaKey] = useState<string>(() => ls(LS_AREA) ?? '')
   const [geo, setGeo] = useState<{ status: 'idle' | 'asking' | 'denied' | 'unavailable' | 'ok'; pos?: [number, number]; acc?: number }>({ status: 'idle' })
   const today = todayISO()
 
   // Follow the active vehicle's fuel until the user picks a product themselves.
-  useEffect(() => { if (!ls(LS_PRODUCT)) setProduct(defaultProduct) }, [defaultProduct])
+  // Switching vehicle starts on that vehicle's grade. Browsing other grades afterwards is still free.
+  useEffect(() => { setProduct(startProduct) }, [vehicle?.id, startProduct]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const locate = () => {
     if (!('geolocation' in navigator)) { setGeo({ status: 'unavailable' }); return }
@@ -275,6 +280,9 @@ export function FuelWatchPage() {
   const pos = (v: number) => `${((v - scaleLo) / span) * 94 + 3}%`
 
   const estimateOne = focus ? typicalCurrent(data, focus.region, focus.area, product, today) : null
+  // The vehicle's own brand and grade, when the page is showing that grade for a chosen/near area.
+  const mine = pref && focus && product === pref.product ? brandPrice(data, focus.region, focus.area, pref.brand, pref.product, today) : null
+  const mineMissing = !!(pref && focus && product === pref.product && !mine)
 
   return (
     <div className="page space-y-4">
@@ -282,8 +290,18 @@ export function FuelWatchPage() {
       <section className="rounded-2xl bg-gradient-to-br from-orange-500 to-orange-800 p-5 text-white shadow-lg" aria-live="polite">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-sm opacity-90">{geo.status === 'ok' && est ? 'Estimated price near you' : selected ? 'Typical price in your selected area' : 'Typical price'} · {titleCase(product)}</p>
-            {est ? (
+            <p className="text-sm opacity-90">
+              {mine ? `Your fuel · ${titleCase(pref!.brand)} ${titleCase(pref!.product)}` : `${geo.status === 'ok' && est ? 'Estimated price near you' : selected ? 'Typical price in your selected area' : 'Typical price'} · ${titleCase(product)}`}
+            </p>
+            {mine ? (
+              <>
+                <p className="my-1 text-4xl font-extrabold tracking-tight">{peso(mine.mid, 2)}<span className="text-lg font-semibold opacity-80"> /L</span></p>
+                <p className="text-sm opacity-90">
+                  {placeLabel(focus!.area)} · {mine.lo === mine.hi ? '' : `${peso(mine.lo, 2)} – ${peso(mine.hi, 2)} · `}
+                  {mine.estimated ? `estimated this week (measured ${fmtDate(focus!.region.weekStart)} ${mine.delta < 0 ? '−' : '+'}${peso(Math.abs(mine.delta), 2)} announced)` : `measured ${fmtDate(focus!.region.weekStart)}`}
+                </p>
+              </>
+            ) : est ? (
               <>
                 <p className="my-1 text-4xl font-extrabold tracking-tight">{peso(est.price, 2)}<span className="text-lg font-semibold opacity-80"> /L</span></p>
                 <p className="text-sm opacity-90">
@@ -311,6 +329,8 @@ export function FuelWatchPage() {
             <LocateFixed size={16} className={geo.status === 'asking' ? 'animate-pulse' : ''} /> {geo.status === 'asking' ? 'Locating…' : 'Use my location'}
           </button>
         </div>
+        {mineMissing && estimateOne !== null && <p className="mt-3 rounded-lg bg-black/25 p-2 text-sm">{titleCase(pref!.brand)} {titleCase(pref!.product)} isn’t reported in {placeLabel(focus!.area)} this week, so this is the area’s typical price instead.</p>}
+        {vehicle && !pref && vehicle.fuelType !== 'EV' && focus && <SetPreferred data={data} vehicleName={vehicle.nickname} fuelType={vehicle.fuelType} product={product} onSave={(brand, prod) => saveVehicle({ ...vehicle, preferredFuel: { brand, product: prod } })} />}
         {geo.status === 'denied' && <p role="alert" className="mt-3 rounded-lg bg-black/25 p-2 text-sm">Location permission was blocked. Search for your city below instead, or allow location for this site in your browser settings.</p>}
         {geo.status === 'unavailable' && <p role="alert" className="mt-3 rounded-lg bg-black/25 p-2 text-sm">Couldn’t get your location. Search for your city below.</p>}
         {outOfCoverage && <p className="mt-3 rounded-lg bg-black/25 p-2 text-sm">DOE reports for Metro Manila, Calabarzon, Bicol, Mimaropa, the Visayas and Mindanao are included. Search for the nearest city below, or check the <a className="underline" href={DOE_URL} target="_blank" rel="noopener noreferrer">DOE site</a>.</p>}

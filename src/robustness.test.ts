@@ -322,3 +322,19 @@ describe('Manila time', () => {
     expect(t.toISOString().slice(0, 10)).toBe('2026-11-16') // what the old UTC date said
   })
 })
+
+describe('preferred fuel survives import and is validated', () => {
+  const base = () => JSON.parse(JSON.stringify(buildDemoState('2026-06-01')))
+  it('is kept when valid', () => {
+    const s = base(); s.vehicles[0].preferredFuel = { brand: 'PETRON', product: 'RON 95' }
+    expect(migrate(s)!.vehicles[0].preferredFuel).toEqual({ brand: 'PETRON', product: 'RON 95' })
+  })
+  it('is dropped when malformed, without rejecting the backup', () => {
+    for (const bad of ['x', 5, null, [], { brand: 'PETRON' }, { brand: '', product: 'RON 95' }, { brand: 'PETRON', product: 'PREMIUM' }, { brand: 5, product: 'RON 95' }]) {
+      const s = base(); s.vehicles[0].preferredFuel = bad
+      const r = migrate(s)
+      expect(r, JSON.stringify(bad)).not.toBeNull()
+      expect(r!.vehicles[0].preferredFuel, JSON.stringify(bad)).toBeUndefined()
+    }
+  })
+})

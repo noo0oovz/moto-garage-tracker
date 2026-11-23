@@ -5,6 +5,8 @@ import { CODING_DAYS, FUEL_TYPES, PART_TYPES } from './data'
 import { EXPENSE_CATEGORIES, PART_CONDITIONS, type CodingDay, type Expense, type ExpenseCategory, type FuelLog, type FuelType, type MaintItem, type PartCondition, type PartRecord, type ServiceRecord, type Vehicle, type VehicleType } from './types'
 import { peso, todayISO } from './logic'
 import { MONTH_NAMES, codingDayFor, codingIsAuto, nextRenewal } from './plate'
+import { useFuelData } from './useFuelData'
+import { brandsFor, isProduct, productsFor, type FwProduct } from './pricing'
 
 export type ModalState =
   | { kind: 'log'; tab: 'fuel' | 'expense'; editFuel?: FuelLog; editExpense?: Expense }
@@ -291,6 +293,16 @@ function VehicleModal({ item, close }: { item?: Vehicle; close: () => void }) {
   const [coding, setCoding] = useState<CodingDay>(item?.codingDay ?? codingDayFor(item?.type ?? 'car', item?.plate ?? ''))
   const [codingManual, setCodingManual] = useState(item ? !codingIsAuto(item) : false)
   const [fuel, setFuel] = useState<FuelType>(item?.fuelType ?? 'Gasoline')
+  // Preferred fuel: the brand and grade this vehicle usually buys. Grades follow the vehicle's fuel type.
+  const [prefBrand, setPrefBrand] = useState(item?.preferredFuel?.brand ?? '')
+  const [prefProduct, setPrefProduct] = useState<string>(item?.preferredFuel?.product ?? '')
+  const { data: priceData } = useFuelData()
+  const grades = productsFor(fuel)
+  // Only offer brands that actually report the chosen grade; keep a saved brand listed so it is never silently lost.
+  const brandChoices = (() => {
+    const list = priceData && isProduct(prefProduct) ? brandsFor(priceData, prefProduct) : []
+    return prefBrand && !list.includes(prefBrand) ? [prefBrand, ...list] : list
+  })()
   const claim = useOnce()
   const autoCoding = codingDayFor(type, plate)
   const shownCoding = codingManual ? coding : autoCoding
@@ -305,6 +317,7 @@ function VehicleModal({ item, close }: { item?: Vehicle; close: () => void }) {
           saveVehicle({
             id: item?.id, type, nickname: nickname.trim() || `${make} ${model}`.trim() || 'My Vehicle', make, model,
             year: numVal(year), plate, odometer: numVal(odo), avgDailyKm: numVal(daily), codingDay: shownCoding, fuelType: fuel,
+            preferredFuel: prefBrand && isProduct(prefProduct) && grades.includes(prefProduct) ? { brand: prefBrand, product: prefProduct } : undefined,
           })
           close()
         }}
@@ -330,10 +343,32 @@ function VehicleModal({ item, close }: { item?: Vehicle; close: () => void }) {
           </select>
         </Field>
         <Field label="Fuel Type">
-          <select className="field" value={fuel} onChange={(e) => setFuel(e.target.value as FuelType)}>
+          <select className="field" value={fuel} onChange={(e) => {
+            const next = e.target.value as FuelType
+            setFuel(next)
+            // A grade that does not suit the new fuel type (e.g. RON 95 on a diesel) would be nonsense: clear it.
+            if (!productsFor(next).includes(prefProduct as FwProduct)) { setPrefProduct(''); setPrefBrand('') }
+          }}>
             {FUEL_TYPES.map((f) => <option key={f}>{f}</option>)}
           </select>
         </Field>
+        {grades.length > 0 && (
+          <fieldset className="col-span-2 grid grid-cols-2 gap-3 rounded-xl border border-slate-200 p-3 dark:border-white/10">
+            <legend className="px-1 text-xs font-semibold text-slate-500 dark:text-slate-400">Preferred fuel (shown in Fuel Watch)</legend>
+            <Field label="Fuel grade">
+              <select className="field" value={prefProduct} onChange={(e) => { setPrefProduct(e.target.value); setPrefBrand('') }}>
+                <option value="">No preference</option>
+                {grades.map((g) => <option key={g} value={g}>{g.replace(/\w\S*/g, (w) => w[0] + w.slice(1).toLowerCase())}</option>)}
+              </select>
+            </Field>
+            <Field label="Brand">
+              <select className="field" value={prefBrand} disabled={!prefProduct} onChange={(e) => setPrefBrand(e.target.value)}>
+                <option value="">{prefProduct ? 'Any brand' : 'Pick a grade first'}</option>
+                {brandChoices.map((b) => <option key={b} value={b}>{b.replace(/\w\S*/g, (w) => w[0] + w.slice(1).toLowerCase())}</option>)}
+              </select>
+            </Field>
+          </fieldset>
+        )}
         <p className="col-span-2 -mt-1 text-xs text-slate-500" aria-live="polite">
           {codingManual && shownCoding !== autoCoding ? (
             <>Set by you. Your plate{autoCoding === 'Exempt' ? '' : ` would give ${autoCoding}`}. <button type="button" className="font-semibold text-orange-500 underline" onClick={() => setCodingManual(false)}>Use plate rule</button></>

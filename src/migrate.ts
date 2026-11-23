@@ -2,6 +2,7 @@ import type { AppState, Expense, FuelLog, MaintItem, PartRecord, ServiceRecord, 
 import { EXPENSE_CATEGORIES, PART_CONDITIONS } from './types'
 import { SCHEMA_VERSION } from './data'
 import { isISODate } from './logic'
+import { isProduct } from './pricing'
 
 const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x)
 const str = (x: unknown, d = '') => (typeof x === 'string' ? x : typeof x === 'number' && Number.isFinite(x) ? String(x) : d)
@@ -44,6 +45,8 @@ export function migrate(raw: unknown, now = new Date(), today = now.toISOString(
       year: Math.round(nz(v.year, new Date().getFullYear())), plate: str(v.plate),
       odometer: Math.max(0, nz(v.odometer)), avgDailyKm: Math.max(0, nz(v.avgDailyKm, 30)),
       codingDay: oneOf(v.codingDay, CODING, 'Exempt'), fuelType: oneOf(v.fuelType, FUELS, 'Gasoline'),
+      preferredFuel: isObj(v.preferredFuel) && typeof v.preferredFuel.brand === 'string' && v.preferredFuel.brand && isProduct(v.preferredFuel.product)
+        ? { brand: v.preferredFuel.brand, product: v.preferredFuel.product } : undefined,
     })),
   )
   const ids = new Set(vehicles.map((v) => v.id))

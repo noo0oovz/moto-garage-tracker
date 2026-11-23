@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import fs from 'node:fs'
 import {
-  areaCoords, areaKey, brandRows, estimateAt, freshness, haversineKm, latestAdjustmentWeek, nearbyFallback, nearestAreas, parseFuelData, productGroup, projectPrice, searchAreas, typicalCurrent, typicalPrice,
+  areaCoords, areaKey, brandPrice, brandRows, brandsFor, isProduct, productsFor, estimateAt, freshness, haversineKm, latestAdjustmentWeek, nearbyFallback, nearestAreas, parseFuelData, productGroup, projectPrice, searchAreas, typicalCurrent, typicalPrice,
   type FwArea, type FwData,
 } from './pricing'
 import { parseWeek } from '../scripts/week.mjs'
@@ -274,5 +274,52 @@ describe('nearbyFallback (towns DOE does not monitor)', () => {
   it('returns null for unknown places and very short input', () => {
     expect(nearbyFallback(d, 'atlantis')).toBeNull()
     expect(nearbyFallback(d, 'sa')).toBeNull()
+  })
+})
+
+describe('preferred brand + fuel', () => {
+  const a: FwArea = { name: 'Marikina City', province: '', prices: { 'RON 95': { PETRON: [70, 72], SHELL: [78, 80] }, DIESEL: { PETRON: [90, 90] } } }
+  const d: FwData = {
+    ...data([a]),
+    adjustments: [{ weekStart: '2026-11-17', weekEnd: '2026-11-23', source: '', brands: { PETRON: { gasoline: -1.5, diesel: -3.8 } } }],
+  }
+  const region = d.regions[0] // measured week of 2026-11-10
+  it('applies the announced change for that brand and grade', () => {
+    const r = brandPrice(d, region, a, 'PETRON', 'RON 95', '2026-11-20')!
+    expect(r).toMatchObject({ lo: 68.5, hi: 70.5, mid: 69.5, estimated: true, delta: -1.5, measured: [70, 72] })
+    expect(brandPrice(d, region, a, 'PETRON', 'DIESEL', '2026-11-20')).toMatchObject({ lo: 86.2, hi: 86.2, estimated: true })
+  })
+  it('falls back to the measured price when the brand announced nothing', () => {
+    const r = brandPrice(d, region, a, 'SHELL', 'RON 95', '2026-11-20')!
+    expect(r).toMatchObject({ lo: 78, hi: 80, estimated: false, delta: 0 })
+  })
+  it('is null when the brand does not report that grade in the area', () => {
+    expect(brandPrice(d, region, a, 'SHELL', 'DIESEL', '2026-11-20')).toBeNull()
+    expect(brandPrice(d, region, a, 'CALTEX', 'RON 95', '2026-11-20')).toBeNull()
+    expect(brandPrice(d, region, a, 'PETRON', 'RON 97', '2026-11-20')).toBeNull()
+  })
+  it('does not pretend a measured price is an estimate before any change has started', () => {
+    expect(brandPrice(d, region, a, 'PETRON', 'RON 95', '2026-11-12')!.estimated).toBe(false)
+  })
+  it('lists the brands that report a grade, unbranded stations last', () => {
+    expect(brandsFor(d, 'RON 95')).toEqual(['PETRON', 'SHELL'])
+    expect(brandsFor(d, 'KEROSENE')).toEqual([])
+  })
+  it('validates a stored product name', () => {
+    expect(isProduct('RON 95')).toBe(true)
+    for (const bad of ['ron 95', 'RON95', '', null, 5, undefined, 'PREMIUM']) expect(isProduct(bad), String(bad)).toBe(false)
+  })
+})
+
+describe('productsFor', () => {
+  it('offers diesel grades to diesel vehicles and RON grades to gasoline and hybrids', () => {
+    expect(productsFor('Diesel')).toEqual(['DIESEL', 'DIESEL PLUS'])
+    expect(productsFor('Gasoline')).toEqual(['RON 91', 'RON 95', 'RON 97', 'RON 100'])
+    expect(productsFor('Hybrid')).toEqual(productsFor('Gasoline'))
+  })
+  it('offers nothing to EVs or unknown types', () => {
+    expect(productsFor('EV')).toEqual([])
+    expect(productsFor('')).toEqual([])
+    expect(productsFor('Plasma')).toEqual([])
   })
 })

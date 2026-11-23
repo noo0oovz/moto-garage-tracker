@@ -14,6 +14,8 @@ export interface Vehicle {
   avgDailyKm: number
   codingDay: CodingDay
   fuelType: FuelType
+  /** The brand and grade this vehicle usually buys, so Fuel Watch can headline that price. Optional. */
+  preferredFuel?: { brand: string; product: string }
 }
 
 export interface MaintItem {

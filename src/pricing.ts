@@ -376,3 +376,48 @@ export function nearbyFallback(data: FwData, query: string): NearbyFallback | nu
   const near = nearestAreas(data, hit[2], 8).filter((n) => n.km <= 40 && !(n.place.area.province === '' && PROV_N.has(norm(n.place.area.name)))).slice(0, 3)
   return near.length ? { town: hit[0], province: hit[1], near } : null
 }
+
+// ---- A vehicle's preferred brand + fuel ---------------------------------------------------------
+export interface BrandPrice {
+  brand: string
+  product: FwProduct
+  /** Price range to show: the estimate when announced changes could be applied, otherwise the measured range. */
+  lo: number
+  hi: number
+  mid: number
+  estimated: boolean
+  /** The last measured range and the announced change applied (when estimated). */
+  measured: [number, number]
+  delta: number
+}
+
+/** Does this value name a fuel product we have data for? (Guards stored preferences against edits and old versions.) */
+export const isProduct = (p: unknown): p is FwProduct => typeof p === 'string' && (FW_PRODUCTS as readonly string[]).includes(p)
+
+/**
+ * The price of one brand's fuel grade in one area: measured this week, plus announced changes when a complete chain
+ * exists (same rule as the brand list, so the headline can never disagree with the rows). Null when that brand does
+ * not report that grade in this area.
+ */
+export function brandPrice(data: FwData, region: FwRegion, area: FwArea, brand: string, product: FwProduct, today: string): BrandPrice | null {
+  const row = brandRows(area, product).find((r) => r.brand === brand)
+  if (!row) return null
+  const proj = projectPrice(data, region.weekStart, brand, product, [row.lo, row.hi], today)
+  const lo = proj ? proj.lo : row.lo
+  const hi = proj ? proj.hi : row.hi
+  return { brand, product, lo, hi, mid: (lo + hi) / 2, estimated: !!proj, measured: [row.lo, row.hi], delta: proj ? proj.delta : 0 }
+}
+
+/** Brands that report a grade anywhere in the data, for the preference picker. */
+export function brandsFor(data: FwData, product: FwProduct): string[] {
+  const set = new Set<string>()
+  for (const r of data.regions) for (const a of r.areas) for (const b of Object.keys(a.prices[product] ?? {})) set.add(b)
+  return [...set].sort((x, y) => (x === 'INDEPENDENT' ? 1 : y === 'INDEPENDENT' ? -1 : x.localeCompare(y)))
+}
+
+/** Fuel grades that make sense for a vehicle's fuel type. EVs and unknown types have none. */
+export function productsFor(fuelType: string): FwProduct[] {
+  if (fuelType === 'Diesel') return ['DIESEL', 'DIESEL PLUS']
+  if (fuelType === 'Gasoline' || fuelType === 'Hybrid') return ['RON 91', 'RON 95', 'RON 97', 'RON 100']
+  return []
+}
