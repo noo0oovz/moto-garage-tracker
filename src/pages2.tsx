@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
-import { Fuel, Paperclip, Pencil, Plus, Trash2, ShieldCheck, Wrench, Cog } from 'lucide-react'
+import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { useStore } from './store'
-import { Empty } from './ui'
+import { Empty, ListCard, PageHeader, Stat } from './ui'
+import { IconBtn } from './pages'
+import { PartIcon } from './PartIcon'
 import type { ModalState } from './modals'
 import { fmtDate, fuelEfficiency, inRange, num, peso, warrantyInfo } from './logic'
-import { useLayout } from './useLayout'
 
 type Open = (m: ModalState) => void
 
@@ -25,7 +26,6 @@ function RangeSelect({ value, onChange }: { value: number | null; onChange: (v: 
 
 export function FuelPage({ open }: { open: Open }) {
   const { state, vehicle, deleteLog } = useStore()
-  const layout = useLayout()
   const [range, setRange] = useState<number | null>(365)
   const data = useMemo(() => {
     if (!vehicle) return null
@@ -41,52 +41,42 @@ export function FuelPage({ open }: { open: Open }) {
   if (!vehicle || !data) return <Empty>No vehicle selected.</Empty>
 
   return (
-    <div className="page space-y-4 pb-20">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-lg font-bold">Fuel Logs</h2>
-        <RangeSelect value={range} onChange={setRange} />
-      </div>
+    <div className="page space-y-5">
+      <PageHeader title="Fuel logs" sub={`${data.rows.length} ${data.rows.length === 1 ? 'fill-up' : 'fill-ups'}`} />
+      <RangeSelect value={range} onChange={setRange} />
 
-      <div className="card p-6 text-center">
-        <p className="text-[13px] font-medium" style={{ color: 'var(--text-2)' }}>Total fuel spend</p>
-        <p className="num my-1 text-[34px] font-bold leading-tight tracking-tight">{peso(data.total, 2)}</p>
-        <p className="num text-sm" style={{ color: 'var(--text-2)' }}>
-          {num(data.liters, 2)} litres{data.eff.avg ? ` · ${data.eff.avg.toFixed(1)} km/L average` : ''}
-        </p>
-      </div>
+      <section className="card grid grid-cols-2 gap-x-4 gap-y-4 p-4" aria-label="Fuel summary">
+        {/* the spend is the headline, so it gets the full width and a number can never be split across two lines */}
+        <div className="col-span-2"><Stat label="Spent" value={peso(data.total, 2)} /></div>
+        <Stat label="Litres" value={num(data.liters, 1)} />
+        <Stat label="Average" value={data.eff.avg ? `${data.eff.avg.toFixed(1)} km/L` : '—'} />
+      </section>
 
       {data.rows.length === 0 ? <Empty>No fuel logs in this period.</Empty> : (
-        <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {data.rows.map((f) => (
-            <li key={f.id} className="card p-4">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-sm text-slate-500">{fmtDate(f.date)}</p>
-                <div className="flex items-center gap-1">
-                  <span className="font-bold text-orange-500">{peso(f.totalCost, 2)}</span>
-                  <button aria-label="Edit fuel log" className="grid h-11 w-11 place-items-center rounded-xl text-slate-400 hover:text-orange-500"
-                    onClick={() => open({ kind: 'log', tab: 'fuel', editFuel: f })}><Pencil size={16} /></button>
-                  <button aria-label="Delete fuel log" className="grid h-11 w-11 place-items-center rounded-xl text-slate-400 hover:text-red-500"
-                    onClick={() => { if (confirm('Delete this fuel log?')) deleteLog('fuel', f.id) }}><Trash2 size={16} /></button>
+        <ListCard label="Fuel logs">
+          {data.rows.map((f) => {
+            const eff = data.eff.map[f.id]
+            return (
+              <li key={f.id} className="flex items-center gap-3 py-2.5 pl-4 pr-1" style={{ borderColor: 'var(--hairline)' }}>
+                <div className="min-w-0 flex-1">
+                  <p className="num break-words text-[15px] font-medium leading-snug [overflow-wrap:anywhere]">{fmtDate(f.date)}{f.station ? <span style={{ color: 'var(--text-2)' }}> · {f.station}</span> : null}</p>
+                  <p className="num text-[13px] leading-snug" style={{ color: 'var(--text-2)' }}>
+                    {num(f.odometer)} km · {num(f.liters, 1)} L{!f.fullTank ? ' · partial' : ''}
+                  </p>
                 </div>
-              </div>
-              <div className="mt-1 grid grid-cols-3 gap-2 text-xs text-slate-500">
-                <div><p>Mileage</p><p className="text-sm font-semibold text-slate-900">{num(f.odometer)} km</p></div>
-                <div><p>Volume</p><p className="text-sm font-semibold text-slate-900">{num(f.liters, 2)} L</p></div>
-                <div><p>Efficiency</p><p className="text-sm font-semibold text-slate-900">{data.eff.map[f.id] ? `${data.eff.map[f.id].toFixed(1)} km/L` : '—'}</p></div>
-              </div>
-              {(f.station || !f.fullTank) && (
-                <p className="mt-2 break-words text-xs text-slate-500">{f.station}{!f.fullTank ? ' · partial fill' : ''}</p>
-              )}
-            </li>
-          ))}
-        </ul>
+                <div className="num shrink-0 text-right leading-snug">
+                  <p className="text-[15px] font-semibold">{peso(f.totalCost, 2)}</p>
+                  <p className="text-[13px]" style={{ color: 'var(--text-2)' }}>{eff ? `${eff.toFixed(1)} km/L` : ' '}</p>
+                </div>
+                <div className="flex shrink-0">
+                  <IconBtn label="Edit fuel log" onClick={() => open({ kind: 'log', tab: 'fuel', editFuel: f })}><Pencil size={16} /></IconBtn>
+                  <IconBtn label="Delete fuel log" onClick={() => { if (confirm('Delete this fuel log?')) deleteLog('fuel', f.id) }}><Trash2 size={16} /></IconBtn>
+                </div>
+              </li>
+            )
+          })}
+        </ListCard>
       )}
-
-      <button onClick={() => open({ kind: 'log', tab: 'fuel' })} aria-label="Log fuel"
-        style={{ right: 'max(1rem, env(safe-area-inset-right))', bottom: layout === 'phone' ? 'calc(5.5rem + env(safe-area-inset-bottom))' : '1rem' }}
-        className="btn-primary fixed z-20 rounded-full px-5 shadow-xl shadow-orange-500/30">
-        <Fuel size={18} /> LOG FUEL
-      </button>
     </div>
   )
 }
@@ -107,35 +97,34 @@ export function HistoryPage({ open }: { open: Open }) {
   const ytd = state.services.filter((s) => s.vehicleId === vehicle.id && s.date.startsWith(year)).reduce((t, s) => t + (s.cost ?? 0), 0)
 
   return (
-    <div className="page space-y-4">
-      <div className="card p-4 text-center">
-        <p className="text-xs text-slate-500">Total Service Spend YTD</p>
-        <p className="num text-3xl font-bold tracking-tight">{peso(ytd, 2)}</p>
-      </div>
+    <div className="page space-y-5">
+      <PageHeader title="Service history" sub={`${rows.length} ${rows.length === 1 ? 'record' : 'records'}`} />
+      <section className="card p-4" aria-label="Service spend this year"><Stat label={`Service spend ${year}`} value={peso(ytd, 2)} /></section>
       <div className="flex flex-col gap-2 sm:flex-row">
-        <input className="field sm:flex-1" placeholder="Search services…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="field sm:flex-1" placeholder="Search services…" aria-label="Search services" value={q} onChange={(e) => setQ(e.target.value)} />
         <RangeSelect value={range} onChange={setRange} />
       </div>
       {rows.length === 0 ? <Empty>No service history yet. Tap “Mark Serviced” on a maintenance item to record one.</Empty> : (
-        <ol className="grid gap-3 md:grid-cols-2">
+        <ListCard label="Service records">
           {rows.map((s) => (
-            <li key={s.id} className="card relative overflow-hidden p-4 pl-5">
-              <span className="absolute inset-y-3 left-0 w-1 rounded-r bg-orange-500" aria-hidden />
-              <div className="flex items-start justify-between gap-2">
-                <h3 className="min-w-0 text-sm font-bold leading-snug">{s.name}</h3>
-                <button aria-label="Edit service record" className="-mt-2 ml-auto grid h-11 w-11 shrink-0 place-items-center rounded-xl text-slate-400 hover:text-orange-500"
-                  onClick={() => open({ kind: 'editService', item: s })}><Pencil size={16} /></button>
-                <button aria-label="Delete service record" className="-mr-2 -mt-2 grid h-11 w-11 shrink-0 place-items-center rounded-xl text-slate-400 hover:text-red-500"
-                  onClick={() => { if (confirm('Delete this service record (and its linked expense)?')) deleteService(s.id) }}><Trash2 size={16} /></button>
+            <li key={s.id} className="py-3 pl-4 pr-1" style={{ borderColor: 'var(--hairline)' }}>
+              <div className="flex items-start gap-3">
+                <PartIcon item={{ name: s.name }} tone="check" size={36} round />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="min-w-0 text-[15px] font-medium leading-snug [overflow-wrap:anywhere]">{s.name}</p>
+                    <span className="num shrink-0 text-[15px] font-semibold" style={s.cost ? undefined : { color: 'var(--text-3)', fontWeight: 400 }}>{s.cost ? peso(s.cost, 2) : 'No cost'}</span>
+                  </div>
+                  <p className="num text-[13px] leading-snug [overflow-wrap:anywhere]" style={{ color: 'var(--text-2)' }}>{fmtDate(s.date)} · {num(s.odometer)} km{s.shopName ? ` · ${s.shopName}` : ''}</p>
+                </div>
+                <div className="-mt-1 flex shrink-0">
+                  <IconBtn label="Edit service record" onClick={() => open({ kind: 'editService', item: s })}><Pencil size={16} /></IconBtn>
+                  <IconBtn label="Delete service record" onClick={() => { if (confirm('Delete this service record (and its linked expense)?')) deleteService(s.id) }}><Trash2 size={16} /></IconBtn>
+                </div>
               </div>
-              <p className="text-xs text-slate-500">{num(s.odometer)} km · {fmtDate(s.date)}{s.shopName ? ` · ${s.shopName}` : ''}</p>
-              <p className="mt-2 flex items-center justify-between text-base font-bold">
-                {s.cost ? peso(s.cost, 2) : <span className="text-sm font-medium text-slate-400">No cost recorded</span>}
-                <Paperclip size={16} className="text-slate-400" aria-hidden />
-              </p>
             </li>
           ))}
-        </ol>
+        </ListCard>
       )}
     </div>
   )
@@ -154,52 +143,44 @@ export function PartsPage({ open }: { open: Open }) {
   const total = all.reduce((s, p) => s + p.amount, 0)
 
   return (
-    <div className="page space-y-4">
-      <div className="card flex items-center justify-between p-4">
-        <div>
-          <p className="text-xs text-slate-500">Parts &amp; Accessories Spend</p>
-          <p className="num text-2xl font-bold tracking-tight">{peso(total, 2)}</p>
-        </div>
-        <button className="btn-primary" onClick={() => open({ kind: 'part' })}><Plus size={16} /> Add part</button>
-      </div>
+    <div className="page space-y-5">
+      <PageHeader title="Parts" sub={`${all.length} ${all.length === 1 ? 'part' : 'parts'} · ${peso(total, 2)}`}
+        action={<button className="btn-primary" onClick={() => open({ kind: 'part' })}><Plus size={16} /> Add part</button>} />
       <select className="field sm:w-64" aria-label="Part type filter" value={filter} onChange={(e) => setFilter(e.target.value)}>
         {types.map((t) => <option key={t}>{t}</option>)}
       </select>
       {rows.length === 0 ? <Empty>No parts recorded yet.</Empty> : (
-        <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <ListCard label="Parts">
           {rows.map((p) => {
             const w = warrantyInfo(p)
+            const detail = [p.brand, p.description, p.partNumber && `#${p.partNumber}`].filter(Boolean).join(' · ') || p.condition
             return (
-              <li key={p.id} className="card relative overflow-hidden p-4 pl-5">
-                <span className="absolute inset-y-3 left-0 w-1 rounded-r bg-orange-500" aria-hidden />
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <h3 className="flex items-center gap-1.5 text-sm font-bold"><Cog size={14} className="shrink-0 text-orange-500" /> <span className="break-words">{p.partType}</span></h3>
-                    <p className="break-words text-xs text-slate-500">
-                      {[p.brand, p.description, p.partNumber && `#${p.partNumber}`].filter(Boolean).join(' · ') || p.condition}
+              <li key={p.id} className="py-3 pl-4 pr-1" style={{ borderColor: 'var(--hairline)' }}>
+                <div className="flex items-start gap-3">
+                  <PartIcon item={{ name: p.partType }} tone="check" size={36} round />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <p className="min-w-0 text-[15px] font-medium leading-snug [overflow-wrap:anywhere]">{p.partType}</p>
+                      <span className="num shrink-0 text-[15px] font-semibold">{peso(p.amount, 2)}</span>
+                    </div>
+                    <p className="text-[13px] leading-snug [overflow-wrap:anywhere]" style={{ color: 'var(--text-2)' }}>{detail}</p>
+                    <p className="num text-[13px] leading-snug" style={{ color: 'var(--text-2)' }}>
+                      {fmtDate(p.date)} · {num(p.installedKm)} km
+                      {w && <span style={{ color: w.active ? 'var(--ok)' : 'var(--text-3)' }}> · {w.active ? `Warranty ${w.days}d left` : 'Warranty expired'}</span>}
                     </p>
+                    {p.notes && <p className="text-[13px] leading-snug [overflow-wrap:anywhere]" style={{ color: 'var(--text-2)' }}>{p.notes}</p>}
                   </div>
-                  <button aria-label="Edit part" className="-mt-2 grid h-11 w-11 shrink-0 place-items-center rounded-xl text-slate-400 hover:text-orange-500"
-                    onClick={() => open({ kind: 'part', item: p })}><Pencil size={16} /></button>
-                  <button aria-label="Delete part" className="-mr-2 -mt-2 grid h-11 w-11 shrink-0 place-items-center rounded-xl text-slate-400 hover:text-red-500"
-                    onClick={() => { if (confirm('Delete this part record (and its linked expense)?')) deletePart(p.id) }}><Trash2 size={16} /></button>
+                  <div className="-mt-1 flex shrink-0">
+                    <IconBtn label="Edit part" onClick={() => open({ kind: 'part', item: p })}><Pencil size={16} /></IconBtn>
+                    <IconBtn label="Delete part" onClick={() => { if (confirm('Delete this part record (and its linked expense)?')) deletePart(p.id) }}><Trash2 size={16} /></IconBtn>
+                  </div>
                 </div>
-                <p className="mt-1 text-xs text-slate-500">{p.condition} · {num(p.installedKm)} km · {fmtDate(p.date)}</p>
-                <div className="mt-2 flex items-center justify-between">
-                  <span className="text-base font-bold">{peso(p.amount, 2)}</span>
-                  {w && (
-                    <span className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${w.active ? 'bg-emerald-500/15 text-emerald-600' : 'bg-slate-500/15 text-slate-500'}`}>
-                      <ShieldCheck size={12} /> {w.active ? `Warranty ${w.days}d left` : 'Warranty expired'}
-                    </span>
-                  )}
-                </div>
-                {p.notes && <p className="mt-2 text-xs text-slate-500">{p.notes}</p>}
               </li>
             )
           })}
-        </ul>
+        </ListCard>
       )}
-      <p className="flex items-center gap-1 text-xs text-slate-500"><Wrench size={12} /> Each part also appears in your Logs ledger as “Wear &amp; Tear Parts”.</p>
+      <p className="px-1 text-[13px]" style={{ color: 'var(--text-2)' }}>Each part also appears in your Logs ledger as “Wear &amp; Tear Parts”.</p>
     </div>
   )
 }

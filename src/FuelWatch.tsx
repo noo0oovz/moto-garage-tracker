@@ -12,6 +12,9 @@ import {
 
 const DOE_URL = 'https://doe.gov.ph/data-and-prices/liquid-fuels/retail-pump-prices'
 const MAX_NEAR_KM = 60
+/** The quiet block used for the page's notes and warnings. */
+const NOTE = { background: 'var(--surface-2)', color: 'var(--text-2)', borderRadius: 'var(--r-ctl)' } as const
+
 const LS_AREA = 'motogarage-fw-area'
 const LS_PRODUCT = 'motogarage-fw-product'
 
@@ -20,10 +23,6 @@ function lsSet(k: string, v: string) { try { localStorage.setItem(k, v) } catch 
 // DOE weeks follow Philippine time, so "today" for price estimates is the Manila date wherever the user is.
 const todayISO = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date())
 
-const BRAND_STYLE: Record<string, string> = {
-  PETRON: 'bg-blue-500', SHELL: 'bg-yellow-400', CALTEX: 'bg-red-500', PHOENIX: 'bg-orange-500', TOTAL: 'bg-rose-500',
-  'FLYING V': 'bg-green-500', UNIOIL: 'bg-sky-500', SEAOIL: 'bg-cyan-500', PTT: 'bg-indigo-500', JETTI: 'bg-lime-500', 'MY GAS': 'bg-teal-500', 'CLEAN FUEL': 'bg-emerald-500', INDEPENDENT: 'bg-slate-400',
-}
 // User-facing island groups. "Luzon" is the South Luzon report (North Luzon is not available).
 const GROUPS = [
   { id: 'ncr', label: 'NCR' },
@@ -39,9 +38,9 @@ const range = (lo: number, hi: number) => (lo === hi ? peso(lo, 2) : `${peso(lo,
 
 function FreshBadge({ region }: { region: FwRegion }) {
   const f = freshness(region.weekEnd)
-  const tone = f === 'current' ? 'bg-emerald-500/15 text-emerald-600' : f === 'aging' ? 'bg-amber-500/15 text-amber-600' : 'bg-red-500/15 text-red-600'
+  const tone = f === 'current' ? 'pill-ok' : f === 'aging' ? 'pill-soon' : 'pill-over'
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${tone}`}>
+    <span className={`pill ${tone}`}>
       {f !== 'current' && <TriangleAlert size={12} />} Measured {fmtDate(region.weekStart)}–{fmtDate(region.weekEnd)}{f === 'stale' ? ' · outdated' : ''}
     </span>
   )
@@ -106,7 +105,7 @@ function AreaSearch({ data, value, onPick, placeholder }: { data: FwData; value:
                 const k = makeKey(n.place.region, n.place.area)
                 return (
                   <li key={k} role="option" aria-selected="false" onMouseDown={(e) => { e.preventDefault(); pick(k) }}
-                    className="flex min-h-11 cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm hover:bg-orange-500/10">
+                    className="flex min-h-11 cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm hover:bg-[var(--brand-bg)]">
                     <span className="min-w-0 break-words font-medium">{n.place.label}</span>
                     <span className="shrink-0 text-xs text-slate-400">{Math.round(n.km)} km away</span>
                   </li>
@@ -118,7 +117,7 @@ function AreaSearch({ data, value, onPick, placeholder }: { data: FwData; value:
           ) : hits.map((h, i) => (
             <li key={h.key} id={`${id}-o${i}`} role="option" aria-selected={i === active}
               onMouseDown={(e) => { e.preventDefault(); pick(h.key) }} onMouseEnter={() => setActive(i)}
-              className={`flex min-h-11 cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm ${i === active ? 'bg-orange-500/10' : ''}`}>
+              className={`flex min-h-11 cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm ${i === active ? 'bg-[var(--brand-bg)]' : ''}`}>
               <span className="min-w-0 break-words font-medium">{h.label}</span>
               <span className="shrink-0 text-xs text-slate-400">{groupLabel(h.region.id)}</span>
             </li>
@@ -146,26 +145,28 @@ function BrowseAreas({ data, value, onPick }: { data: FwData; value: string; onP
   return (
     <section aria-label="Browse areas" className="min-w-0">
       <span className="label">Or browse by area</span>
-      <div role="tablist" aria-label="Island group" className="grid grid-cols-4 gap-1 rounded-xl bg-slate-100 p-1">
+      <div role="tablist" aria-label="Island group" className="grid grid-cols-4 gap-0.5 p-0.5" style={{ background: 'var(--surface-2)', border: '1px solid var(--hairline)', borderRadius: 'var(--r-ctl)' }}>
         {groups.map((g) => (
           <button key={g.id} role="tab" aria-selected={g.id === current.id} onClick={() => setOpen(g.id)}
-            className={`min-h-11 rounded-lg px-1 text-sm font-semibold transition ${g.id === current.id ? 'on-brand shadow' : 'text-slate-500'}`}>
+            className="min-h-11 rounded-[10px] px-1 text-[13px] font-semibold transition"
+            style={g.id === current.id ? { background: 'var(--surface)', color: 'var(--text)', boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 0 0 0.5px var(--hairline)' } : { color: 'var(--text-2)' }}>
             {g.label}<span className="ml-1 hidden text-xs opacity-70 sm:inline">{g.region!.areas.length}</span>
           </button>
         ))}
       </div>
       {current.id === 'south-luzon' && <p className="mt-2 text-xs text-slate-500">Calabarzon, Mimaropa and Bicol. North Luzon isn’t available yet.</p>}
-      <div role="tabpanel" aria-label={`${current.label} cities`} className="mt-2 max-h-80 space-y-3 overflow-y-auto rounded-xl border border-slate-200 p-2">
+      <div role="tabpanel" aria-label={`${current.label} cities`} className="card mt-2 max-h-80 space-y-3 overflow-y-auto p-2">
         {byProvince.map(([prov, list]) => (
           <div key={prov || 'all'}>
-            {prov && <h3 className="px-1 pb-1 text-xs font-bold uppercase tracking-wide text-slate-500">{prov}</h3>}
+            {prov && <h3 className="px-1 pb-1 text-[12px] font-medium uppercase tracking-wide" style={{ color: 'var(--text-2)' }}>{prov}</h3>}
             <ul className="grid grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-4">
               {list.map((a) => {
                 const k = makeKey(current.region!, a)
                 return (
                   <li key={k}>
                     <button onClick={() => onPick(k)} aria-pressed={k === value}
-                      className={`min-h-11 w-full rounded-lg px-2 text-left text-sm transition [@media(hover:hover)_and_(pointer:fine)]:lg:min-h-9 ${k === value ? 'on-brand font-semibold' : 'hover:bg-slate-100'}`}>
+                      className="min-h-11 w-full rounded-[10px] px-2 text-left text-[15px] transition hover:bg-[var(--surface-2)] [@media(hover:hover)_and_(pointer:fine)]:lg:min-h-9"
+                      style={k === value ? { background: 'var(--brand-bg)', color: 'var(--brand)', fontWeight: 600 } : undefined}>
                       <span className="line-clamp-2">{a.name}</span>
                     </button>
                   </li>
@@ -186,7 +187,7 @@ function SetPreferred({ data, vehicleName, fuelType, product, onSave }: { data: 
   const brands = brandsFor(data, product).filter((b) => b !== 'INDEPENDENT')
   if (!ok || !brands.length) return null
   return (
-    <div className="mt-3 flex flex-wrap items-end gap-2 rounded-xl bg-slate-100 p-3 text-sm">
+    <div className="mt-3 flex flex-wrap items-end gap-2 p-3 text-[13px]" style={NOTE}>
       <label className="min-w-0 flex-1">
         <span className="label">Show my brand’s {titleCase(product)} price for {vehicleName}</span>
         <select className="field" value={brand} onChange={(e) => setBrand(e.target.value)} aria-label="Preferred brand">
@@ -287,7 +288,7 @@ export function FuelWatchPage() {
   return (
     <div className="page space-y-4">
       {/* Location estimate */}
-      <section className="card p-5" aria-live="polite">
+      <section className="card p-4" aria-live="polite">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[13px] font-medium" style={{ color: 'var(--text-2)' }}>
@@ -295,7 +296,7 @@ export function FuelWatchPage() {
             </p>
             {mine ? (
               <>
-                <p className="num my-1 text-[34px] font-bold leading-tight tracking-tight">{peso(mine.mid, 2)}<span className="text-lg font-medium" style={{ color: 'var(--text-2)' }}> /L</span></p>
+                <p className="num my-1 text-[32px] font-semibold leading-tight tracking-tight">{peso(mine.mid, 2)}<span className="text-lg font-medium" style={{ color: 'var(--text-2)' }}> /L</span></p>
                 <p className="text-sm" style={{ color: 'var(--text-2)' }}>
                   {placeLabel(focus!.area)} · {mine.lo === mine.hi ? '' : `${peso(mine.lo, 2)} – ${peso(mine.hi, 2)} · `}
                   {mine.estimated ? `estimated this week (measured ${fmtDate(focus!.region.weekStart)} ${mine.delta < 0 ? '−' : '+'}${peso(Math.abs(mine.delta), 2)} announced)` : `measured ${fmtDate(focus!.region.weekStart)}`}
@@ -303,7 +304,7 @@ export function FuelWatchPage() {
               </>
             ) : est ? (
               <>
-                <p className="num my-1 text-[34px] font-bold leading-tight tracking-tight">{peso(est.price, 2)}<span className="text-lg font-medium" style={{ color: 'var(--text-2)' }}> /L</span></p>
+                <p className="num my-1 text-[32px] font-semibold leading-tight tracking-tight">{peso(est.price, 2)}<span className="text-lg font-medium" style={{ color: 'var(--text-2)' }}> /L</span></p>
                 <p className="text-sm" style={{ color: 'var(--text-2)' }}>
                   Based on the last measured prices in {est.used.map((u) => `${placeLabel(u.place.area)} (${Math.round(u.km)} km)`).join(', ')}
                   {est.spread > 1 ? ` · areas differ by up to ${peso(est.spread, 2)}` : ''}
@@ -311,7 +312,7 @@ export function FuelWatchPage() {
               </>
             ) : focus && estimateOne !== null ? (
               <>
-                <p className="num my-1 text-[34px] font-bold leading-tight tracking-tight">{peso(estimateOne.price, 2)}<span className="text-lg font-medium" style={{ color: 'var(--text-2)' }}> /L</span></p>
+                <p className="num my-1 text-[32px] font-semibold leading-tight tracking-tight">{peso(estimateOne.price, 2)}<span className="text-lg font-medium" style={{ color: 'var(--text-2)' }}> /L</span></p>
                 <p className="text-sm" style={{ color: 'var(--text-2)' }}>
                   {placeLabel(focus.area)} · median of brands ·{' '}
                   {estimateOne.projected > 0
@@ -329,11 +330,11 @@ export function FuelWatchPage() {
             <LocateFixed size={16} className={geo.status === 'asking' ? 'animate-pulse' : ''} /> {geo.status === 'asking' ? 'Locating…' : 'Use my location'}
           </button>
         </div>
-        {mineMissing && estimateOne !== null && <p className="mt-3 rounded-xl bg-slate-100 p-3 text-sm">{titleCase(pref!.brand)} {titleCase(pref!.product)} isn’t reported in {placeLabel(focus!.area)} this week, so this is the area’s typical price instead.</p>}
+        {mineMissing && estimateOne !== null && <p className="mt-3 p-3 text-[13px] leading-snug" style={NOTE}>{titleCase(pref!.brand)} {titleCase(pref!.product)} isn’t reported in {placeLabel(focus!.area)} this week, so this is the area’s typical price instead.</p>}
         {vehicle && !pref && vehicle.fuelType !== 'EV' && focus && <SetPreferred data={data} vehicleName={vehicle.nickname} fuelType={vehicle.fuelType} product={product} onSave={(brand, prod) => saveVehicle({ ...vehicle, preferredFuel: { brand, product: prod } })} />}
-        {geo.status === 'denied' && <p role="alert" className="mt-3 rounded-xl bg-slate-100 p-3 text-sm">Location permission was blocked. Search for your city below instead, or allow location for this site in your browser settings.</p>}
-        {geo.status === 'unavailable' && <p role="alert" className="mt-3 rounded-xl bg-slate-100 p-3 text-sm">Couldn’t get your location. Search for your city below.</p>}
-        {outOfCoverage && <p className="mt-3 rounded-xl bg-slate-100 p-3 text-sm">DOE reports for Metro Manila, Calabarzon, Bicol, Mimaropa, the Visayas and Mindanao are included. Search for the nearest city below, or check the <a className="underline" href={DOE_URL} target="_blank" rel="noopener noreferrer">DOE site</a>.</p>}
+        {geo.status === 'denied' && <p role="alert" className="mt-3 p-3 text-[13px] leading-snug" style={NOTE}>Location permission was blocked. Search for your city below instead, or allow location for this site in your browser settings.</p>}
+        {geo.status === 'unavailable' && <p role="alert" className="mt-3 p-3 text-[13px] leading-snug" style={NOTE}>Couldn’t get your location. Search for your city below.</p>}
+        {outOfCoverage && <p className="mt-3 p-3 text-[13px] leading-snug" style={NOTE}>DOE reports for Metro Manila, Calabarzon, Bicol, Mimaropa, the Visayas and Mindanao are included. Search for the nearest city below, or check the <a className="underline" href={DOE_URL} target="_blank" rel="noopener noreferrer">DOE site</a>.</p>}
         <p className="mt-3 text-xs" style={{ color: 'var(--text-2)' }}><MapPin size={12} className="mb-0.5 mr-1 inline" />Your location stays on this device and is never sent anywhere. It’s used only to find the nearest monitored area.</p>
       </section>
 
@@ -342,10 +343,11 @@ export function FuelWatchPage() {
         <AreaSearch data={data} value={areaKey} onPick={choose} placeholder={nearOk ? `Nearest to me: ${placeLabel(nearOk.place.area)}` : 'e.g. Davao, Parañaque, Cebu…'} />
         <div>
           <span className="label">Fuel</span>
-          <div className="flex flex-wrap gap-1" role="tablist" aria-label="Fuel product">
+          <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Fuel product">
             {FW_PRODUCTS.map((p) => (
               <button key={p} role="tab" aria-selected={product === p} onClick={() => { setProduct(p); lsSet(LS_PRODUCT, p) }}
-                className={`min-h-11 shrink-0 rounded-xl px-3 text-sm font-semibold transition ${product === p ? 'on-brand' : 'border border-slate-300 text-slate-600'}`}>
+                className="min-h-11 shrink-0 rounded-full px-3.5 text-[13px] font-medium transition"
+                style={product === p ? { background: 'var(--brand-bg)', color: 'var(--brand)', boxShadow: 'inset 0 0 0 1px var(--brand)' } : { background: 'var(--surface-2)', color: 'var(--text-2)' }}>
                 {titleCase(p)}
               </button>
             ))}
@@ -376,22 +378,21 @@ export function FuelWatchPage() {
                 <li key={r.brand}>
                   <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-sm">
                     <span className="flex items-center gap-2 font-semibold">
-                      <span className={`h-2.5 w-2.5 rounded-full ${BRAND_STYLE[r.brand] ?? 'bg-slate-400'}`} aria-hidden />
                       {titleCase(r.brand)}{r.brand === 'INDEPENDENT' && <span className="text-xs font-normal text-slate-400">(unbranded stations)</span>}
-                      {r.brand === lowestBrand && <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-bold text-emerald-600">Lowest</span>}
+                      {r.brand === lowestBrand && <span className="text-[12px] font-medium" style={{ color: 'var(--ok)' }}>Lowest</span>}
                     </span>
                     <span className="text-right tabular-nums">
                       {r.p ? (
                         <>
                           <span className="font-bold">{range(r.p.lo, r.p.hi)}</span>
-                          <span className="ml-1.5 rounded bg-orange-500/15 px-1.5 py-0.5 text-[11px] font-bold text-orange-600">Est. now</span>
+                          <span className="ml-1.5 text-[12px] font-medium" style={{ color: 'var(--text-2)' }}>est. now</span>
                         </>
                       ) : <span className="font-bold">{range(r.lo, r.hi)}</span>}
                     </span>
                   </div>
-                  <div className="relative h-2 overflow-hidden rounded-full bg-slate-200" aria-hidden>
-                    <div className={`absolute inset-y-0 rounded-full ${BRAND_STYLE[r.brand] ?? 'bg-slate-400'}`}
-                      style={{ left: pos(r.p ? r.p.lo : r.lo), width: `max(6px, ${((((r.p ? r.p.hi : r.hi) - (r.p ? r.p.lo : r.lo)) / span) * 94)}%)` }} />
+                  <div className="relative h-[3px] overflow-hidden rounded-full" style={{ background: 'var(--hairline)' }} aria-hidden>
+                    <div className="absolute inset-y-0 rounded-full"
+                      style={{ background: r.brand === lowestBrand ? 'var(--ok)' : 'var(--text-3)', left: pos(r.p ? r.p.lo : r.lo), width: `max(6px, ${((((r.p ? r.p.hi : r.hi) - (r.p ? r.p.lo : r.lo)) / span) * 94)}%)` }} />
                   </div>
                   {r.p ? (
                     <p className="mt-1 text-xs text-slate-500">

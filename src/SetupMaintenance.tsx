@@ -123,7 +123,7 @@ export function SetupMaintenanceModal({ vehicleId, close }: { vehicleId: string;
               <div className="grid grid-cols-2 gap-2">
                 {TRANSMISSIONS.map((t) => (
                   <button key={t.value} type="button" aria-pressed={transmission === t.value} onClick={() => setTransmission(t.value)}
-                    className={`min-h-14 rounded-xl border px-3 py-2 text-left text-sm transition ${transmission === t.value ? 'border-orange-500 bg-orange-500/10 font-semibold' : 'border-slate-300'}`}>
+                    className="min-h-14 px-3 py-2 text-left text-sm transition" style={transmission === t.value ? { background: 'var(--brand-bg)', boxShadow: 'inset 0 0 0 1px var(--brand)', borderRadius: 'var(--r-ctl)', fontWeight: 600 } : { background: 'var(--surface-2)', borderRadius: 'var(--r-ctl)' }}>
                     <span className="block">{t.label}</span>
                     <span className="block text-xs font-normal text-slate-500">{t.hint}</span>
                   </button>
@@ -138,7 +138,7 @@ export function SetupMaintenanceModal({ vehicleId, close }: { vehicleId: string;
                   {BIKE_TYPES.map((b) => (
                     <button key={b.value} type="button" role="radio" aria-checked={bikeType === b.value}
                       onClick={() => { setBikeType(b.value); setTransmission(b.value === 'scooter' ? 'cvt' : 'manual') }}
-                      className={`min-h-14 rounded-xl border px-3 py-2 text-left text-sm transition ${bikeType === b.value ? 'border-orange-500 bg-orange-500/10 font-semibold' : 'border-slate-300'}`}>
+                      className="min-h-14 px-3 py-2 text-left text-sm transition" style={bikeType === b.value ? { background: 'var(--brand-bg)', boxShadow: 'inset 0 0 0 1px var(--brand)', borderRadius: 'var(--r-ctl)', fontWeight: 600 } : { background: 'var(--surface-2)', borderRadius: 'var(--r-ctl)' }}>
                       <span className="block">{b.label} <span className="font-normal text-slate-500">· {b.hint}</span></span>
                       <span className="block text-xs font-normal text-slate-500">{b.examples}</span>
                     </button>
@@ -172,7 +172,7 @@ export function SetupMaintenanceModal({ vehicleId, close }: { vehicleId: string;
         </div>
       ) : (
         <div className="space-y-4">
-          <p className="flex items-start gap-2 rounded-xl bg-slate-100 p-3 text-xs text-slate-600">
+          <p className="flex items-start gap-2 p-3 text-[13px] leading-snug" style={{ background: 'var(--surface-2)', color: 'var(--text-2)', borderRadius: 'var(--r-ctl)' }}>
             <Info size={16} className="mt-0.5 shrink-0" aria-hidden />
             <span>These are <b>general guidance</b>, not from your {vehicle.type === 'car' ? 'car' : 'motorcycle'}&rsquo;s own manual. If you have the casa service booklet or sticker, tap an item and type its numbers instead. Not sure when something was done? Pick &ldquo;I don&rsquo;t know&rdquo;. We will simply mark it as worth checking.</span>
           </p>
@@ -186,16 +186,16 @@ export function SetupMaintenanceModal({ vehicleId, close }: { vehicleId: string;
             </button>
           )}
 
-          <ul className="space-y-3">
+          <ul className="card divide-y overflow-hidden">
             {rows.map((r, i) => (
-              <li key={r.item.key} className={`rounded-2xl border p-3 transition ${r.on ? 'border-slate-200' : 'border-dashed border-slate-300 opacity-60'}`}>
+              <li key={r.item.key} className={`p-4 transition ${r.on ? '' : 'opacity-55'}`} style={{ borderColor: 'var(--hairline)' }}>
                 <div className="flex items-start gap-2">
                   <button type="button" role="checkbox" aria-checked={r.on} aria-label={`Track ${r.item.name}`} onClick={() => patch(i, { on: !r.on })}
                     className="-m-1.5 grid h-11 w-11 shrink-0 place-items-center">
-                    <span className={`grid h-6 w-6 place-items-center rounded-md border-2 ${r.on ? 'border-orange-500 on-brand' : 'border-slate-300'}`}>{r.on && <Check size={14} strokeWidth={3} />}</span>
+                    <span className="grid h-6 w-6 place-items-center rounded-full border transition" style={r.on ? { background: 'var(--brand)', borderColor: 'var(--brand)', color: 'var(--brand-on)' } : { borderColor: 'var(--text-3)' }}>{r.on && <Check size={14} strokeWidth={3} />}</span>
                   </button>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-bold">{r.item.name}</p>
+                    <p className="text-[15px] font-medium leading-snug">{r.item.name}</p>
                     <p className="text-xs text-slate-500">
                       {numVal(r.bookletKm) > 0 || numVal(r.bookletMonths) > 0
                         ? <>From your booklet: {intervalText({ intervalKm: numVal(r.bookletKm) || undefined, intervalMonths: numVal(r.bookletMonths) || undefined })}</>
@@ -212,7 +212,7 @@ export function SetupMaintenanceModal({ vehicleId, close }: { vehicleId: string;
                       {ANSWERS.map((a) => (
                         // Three time-based answers on the first row, then the two "no history" answers sharing the second.
                         <button key={a} type="button" role="radio" aria-checked={r.answer === a} onClick={() => patch(i, { answer: a })}
-                          className={`${a === 'never' || a === 'unknown' ? 'col-span-3' : 'col-span-2'} min-h-11 rounded-lg border px-1.5 text-xs font-semibold transition ${r.answer === a ? 'border-orange-500 on-brand' : 'border-slate-300 text-slate-600'}`}>
+                          className={`${a === 'never' || a === 'unknown' ? 'col-span-3' : 'col-span-2'} min-h-11 rounded-[10px] px-1.5 text-[13px] font-medium transition`} style={r.answer === a ? { background: 'var(--brand-bg)', color: 'var(--brand)', boxShadow: 'inset 0 0 0 1px var(--brand)' } : { background: 'var(--surface-2)', color: 'var(--text-2)' }}>
                           {LAST_DONE_LABEL[a]}
                         </button>
                       ))}

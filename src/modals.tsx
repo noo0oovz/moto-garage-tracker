@@ -83,10 +83,10 @@ function LogModal({ initial, editFuel, editExpense, close }: { initial: 'fuel' |
 
   return (
     <Modal title={editing ? `Edit ${tab === 'fuel' ? 'Fuel Log' : 'Expense'}` : `Quick Log · ${vehicle.nickname}`} onClose={close}>
-      <div className={`mb-4 grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 ${editing ? 'hidden' : 'grid'}`}>
+      <div className={`seg-track mb-4 grid-cols-2 ${editing ? 'hidden' : 'grid'}`}>
         {(['fuel', 'expense'] as const).map((t) => (
           <button key={t} type="button" onClick={() => setTab(t)}
-            className={`min-h-11 rounded-lg text-sm font-semibold capitalize transition ${tab === t ? 'on-brand shadow' : 'text-slate-500'}`}>
+            className={`min-h-11 text-[13px] font-semibold capitalize transition ${tab === t ? 'seg-on' : 'seg-off'}`}>
             {t}
           </button>
         ))}
@@ -348,7 +348,7 @@ function VehicleModal({ item, close, openModal }: { item?: Vehicle; close: () =>
         }}
       >
         {!item && (
-          <div className="col-span-2 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
+          <div className="seg-track col-span-2 grid grid-cols-2">
             {(['car', 'motorcycle'] as const).map((t) => (
               <button key={t} type="button" onClick={() => {
                 setType(t)
@@ -356,7 +356,7 @@ function VehicleModal({ item, close, openModal }: { item?: Vehicle; close: () =>
                 if (!fuelTypesFor(t).includes(fuel)) { setFuel('Gasoline'); setPrefProduct(''); setPrefBrand('') }
               }}
                 aria-pressed={type === t}
-                className={`flex min-h-11 items-center justify-center gap-2 rounded-lg text-sm font-semibold capitalize ${type === t ? 'on-brand' : 'text-slate-500'}`}><VehicleIcon v={{ type: t }} size={18} /> {t}</button>
+                className={`flex min-h-11 items-center justify-center gap-2 text-[13px] font-semibold capitalize ${type === t ? 'seg-on' : 'seg-off'}`}><VehicleIcon v={{ type: t }} size={18} /> {t}</button>
             ))}
           </div>
         )}
@@ -384,7 +384,7 @@ function VehicleModal({ item, close, openModal }: { item?: Vehicle; close: () =>
           </select>
         </Field>
         {grades.length > 0 && (
-          <fieldset className="col-span-2 grid grid-cols-2 gap-3 rounded-xl border border-slate-200 p-3">
+          <fieldset className="col-span-2 grid grid-cols-2 gap-3 p-3" style={{ border: '1px solid var(--hairline)', borderRadius: 'var(--r-ctl)' }}>
             <legend className="px-1 text-xs font-semibold text-slate-500">Preferred fuel (shown in Fuel Watch)</legend>
             <Field label="Fuel grade">
               <select className="field" value={prefProduct} onChange={(e) => { setPrefProduct(e.target.value); setPrefBrand('') }}>
@@ -408,7 +408,7 @@ function VehicleModal({ item, close, openModal }: { item?: Vehicle; close: () =>
             : `Filled in from the last digit of your plate (${autoCoding}).`}
         </p>
         {renewal && (
-          <p className={`col-span-2 rounded-xl border px-3 py-2 text-xs ${renewal.status === 'overdue' ? 'border-red-500/40 bg-red-500/10 text-red-600' : renewal.status === 'due' || renewal.status === 'soon' ? 'border-amber-500/40 bg-amber-500/10 text-amber-700' : 'border-slate-300 text-slate-600'}`}>
+          <p className="col-span-2 px-3 py-2 text-[13px] leading-snug" style={{ borderRadius: 'var(--r-ctl)', ...(renewal.status === 'overdue' ? { background: 'var(--over-bg)', color: 'var(--over)' } : renewal.status === 'due' || renewal.status === 'soon' ? { background: 'var(--soon-bg)', color: 'var(--soon)' } : { background: 'var(--surface-2)', color: 'var(--text-2)' }) }}>
             {renewal.status === 'overdue'
               ? <>Registration looks <b>overdue</b>: it was due by the end of <b>{MONTH_NAMES[renewal.month - 1]} {renewal.deadline.slice(0, 4)}</b> ({-renewal.daysLeft} day{renewal.daysLeft === -1 ? '' : 's'} ago).</>
               : <>Estimated registration deadline: <b>{MONTH_NAMES[renewal.month - 1]} {renewal.deadline.slice(0, 4)}</b> (by {renewal.deadline.slice(5, 7)}/{renewal.deadline.slice(8)}).</>}

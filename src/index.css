@@ -130,7 +130,7 @@ h1, h2, h3 { letter-spacing: -0.016em; }
   &::placeholder { color: var(--text-3); }
   &:focus { border-color: var(--brand); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 25%, transparent); }
 }
-@utility btn { @apply inline-flex min-h-11 items-center justify-center gap-2 px-4 text-sm font-semibold transition active:scale-[0.98] disabled:opacity-50; border-radius: var(--r-ctl); }
+@utility btn { @apply inline-flex min-h-11 items-center justify-center gap-2 px-4 text-sm font-semibold transition active:scale-[0.98] disabled:opacity-60; border-radius: var(--r-ctl); }
 @utility btn-primary { @apply btn; background: var(--brand); color: var(--brand-on); &:hover { filter: brightness(1.06); } }
 @utility btn-ghost { @apply btn; color: var(--text); border: 1px solid var(--hairline); &:hover { background: var(--surface-2); } }
 @utility btn-danger { @apply btn; color: var(--over); border: 1px solid color-mix(in srgb, var(--over) 40%, transparent); &:hover { background: var(--over-bg); } }
@@ -147,6 +147,12 @@ h1, h2, h3 { letter-spacing: -0.016em; }
 @utility pill-over { color: var(--over); background: var(--over-bg); }
 @utility pill-check { color: var(--text-2); background: var(--surface-2); }
 @utility pill-brand { color: var(--brand); background: var(--brand-bg); }
+
+/* A segmented toggle's track and its selected / unselected segments. Used where the buttons carry their own meaning (aria-pressed)
+   and so cannot be the Segmented component, but must look identical to it. */
+@utility seg-track { background: var(--surface-2); border: 1px solid var(--hairline); border-radius: var(--r-ctl); padding: 2px; gap: 2px; }
+@utility seg-on { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 0 0 0.5px var(--hairline); border-radius: 10px; }
+@utility seg-off { color: var(--text-2); border-radius: 10px; }
 
 /* Inset-grouped list, as in Apple Settings: one rounded container, rows separated by hairlines. */
 @utility group-list { background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--r-card); box-shadow: var(--elev); overflow: hidden; }

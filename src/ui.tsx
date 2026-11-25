@@ -102,6 +102,40 @@ export function Progress({ pct, className }: { pct: number; className: string })
   )
 }
 
+/**
+ * The title at the top of a page, with an optional quiet action on the right. Every page uses it, so titles are the same
+ * size and weight everywhere and the action sits in the same place.
+ */
+export function PageHeader({ title, sub, action, sectionTitle = false }: { title: string; sub?: ReactNode; action?: ReactNode; /** A heading inside a page (not the page's own title): always shown. */ sectionTitle?: boolean }) {
+  return (
+    <div className={`flex justify-between gap-3 px-1 ${sectionTitle ? 'items-end' : 'items-end md:items-center'}`}>
+      <div className="min-w-0">
+        {/* Tablet and desktop already show the page title in the top bar, so the page's own title is for phones only. */}
+        <h2 className={`break-words text-[20px] font-semibold leading-tight tracking-tight ${sectionTitle ? '' : 'md:sr-only'}`}>{title}</h2>
+        {sub && <p className="num text-[13px]" style={{ color: 'var(--text-2)' }}>{sub}</p>}
+      </div>
+      {action && <div className="shrink-0">{action}</div>}
+    </div>
+  )
+}
+
+/** One card holding a list, rows separated by hairlines. The shared shape for every list in the app. */
+export function ListCard({ children, label, className = '' }: { children: ReactNode; label?: string; className?: string }) {
+  return <ul className={`card divide-y overflow-hidden ${className}`} aria-label={label}>{children}</ul>
+}
+
+/** A small headline figure with a muted caption: spend totals, counts, averages. Numbers use tabular figures. */
+export function Stat({ label, value, sub, tone }: { label: string; value: ReactNode; sub?: ReactNode; tone?: 'ok' | 'soon' | 'over' }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[12px] font-medium uppercase tracking-wide" style={{ color: 'var(--text-2)' }}>{label}</p>
+      {/* a figure is never split across lines: it stays whole and gives up a little size when it is very large */}
+      <p className="num whitespace-nowrap text-[clamp(16px,5.6vw,22px)] font-semibold leading-tight tracking-tight sm:text-[22px]" style={tone ? { color: `var(--${tone})` } : undefined}>{value}</p>
+      {sub && <p className="num text-[13px]" style={{ color: 'var(--text-2)' }}>{sub}</p>}
+    </div>
+  )
+}
+
 export function Empty({ children }: { children: ReactNode }) {
   return (
     <div className="p-8 text-center text-[15px]" style={{ color: 'var(--text-2)', border: '1px dashed var(--hairline)', borderRadius: 'var(--r-card)' }}>

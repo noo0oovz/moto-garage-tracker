@@ -1,7 +1,7 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { CalendarClock, ChevronRight, Cog, Download, FileSpreadsheet, Fuel, Gauge, RotateCcw, Upload, Warehouse, Wrench } from 'lucide-react'
 import { useStore } from './store'
-import { Segmented } from './ui'
+import { PageHeader, Segmented } from './ui'
 import { backupStatus, csvEscape } from './logic'
 import type { Page, ThemeMode } from './types'
 
@@ -12,7 +12,7 @@ export function ListRow({ icon: Icon, title, sub, onClick, danger, trailing }: {
   return (
     <li className="row !p-0">
       <button onClick={onClick} className="flex min-h-14 w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-[var(--surface-2)]">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px]"
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full"
           style={danger ? { background: 'var(--over-bg)', color: 'var(--over)' } : { background: 'var(--surface-2)', color: 'var(--text-2)' }}>
           <Icon size={18} />
         </span>
@@ -74,6 +74,7 @@ export function SettingsPage() {
 
   return (
     <div className="page mx-auto max-w-2xl space-y-6">
+      <PageHeader title="Settings" />
       <Group title="Appearance" footnote="Automatic follows your device: light by day, dark at night.">
         <li className="row">
           <Segmented<ThemeMode> label="Appearance" value={state.theme} onChange={setTheme} options={APPEARANCE} className="w-full" />
@@ -110,7 +111,8 @@ export function MorePage({ go }: { go: (p: Page) => void }) {
     { p: 'settings', icon: CalendarClock, title: 'Settings & Backup', sub: 'Appearance, export, import' },
   ]
   return (
-    <div className="page">
+    <div className="page mx-auto max-w-2xl space-y-5">
+      <PageHeader title="More" />
       <Group>
         {items.map((i) => <ListRow key={i.p} icon={i.icon} title={i.title} sub={i.sub} onClick={() => go(i.p)} />)}
       </Group>
