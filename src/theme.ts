@@ -30,12 +30,12 @@ export const LIGHT: Palette = {
 }
 
 export const DARK: Palette = {
-  canvas: '#000000', surface: '#1C1C1E', surface2: '#2C2C2E', hairline: 'rgba(255,255,255,0.10)',
-  text: '#F5F5F7', text2: '#A1A1A6', text3: '#8E8E93',
-  brand: '#4FC3E0', brandOn: '#00222B', brandBg: '#0E2A33',
-  ok: '#5FD08A', okBg: '#16301F',
-  soon: '#FFB84D', soonBg: '#33260A',
-  over: '#FF8A80', overBg: '#3A1714',
+  canvas: '#0B0D10', surface: '#14171D', surface2: '#1D2128', hairline: 'rgba(255,255,255,0.07)',
+  text: '#F2F4F7', text2: '#A3A9B3', text3: '#8A919C',
+  brand: '#4FC3E0', brandOn: '#00222B', brandBg: '#102A33',
+  ok: '#5FD08A', okBg: '#142A1E',
+  soon: '#FFB84D', soonBg: '#2E230D',
+  over: '#FF8A80', overBg: '#331A19',
 }
 
 export type ThemeChoice = 'system' | 'light' | 'dark'

@@ -34,20 +34,20 @@
 }
 .dark {
   color-scheme: dark;
-  --canvas: #000000;
-  --surface: #1C1C1E;
-  --surface-2: #2C2C2E;
-  --hairline: rgba(255, 255, 255, 0.10);
+  --canvas: #0B0D10;
+  --surface: #14171D;
+  --surface-2: #1D2128;
+  --hairline: rgba(255, 255, 255, 0.07);
   --scrim: rgba(0, 0, 0, 0.6);
-  --text: #F5F5F7;
-  --text-2: #A1A1A6;
-  --text-3: #8E8E93;
+  --text: #F2F4F7;
+  --text-2: #A3A9B3;
+  --text-3: #8A919C;
   --brand: #4FC3E0;
   --brand-on: #00222B;
-  --brand-bg: #0E2A33;
-  --ok: #5FD08A;   --ok-bg: #16301F;
-  --soon: #FFB84D; --soon-bg: #33260A;
-  --over: #FF8A80; --over-bg: #3A1714;
+  --brand-bg: #102A33;
+  --ok: #5FD08A;   --ok-bg: #142A1E;
+  --soon: #FFB84D; --soon-bg: #2E230D;
+  --over: #FF8A80; --over-bg: #331A19;
   --elev: none;
 }
 

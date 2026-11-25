@@ -8,7 +8,7 @@
     <!-- Browser / status bar colour: matches the page canvas in each mode. The script below fixes it when the user has
          chosen a theme that differs from the device. -->
     <meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#0B0D10" media="(prefers-color-scheme: dark)" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -27,7 +27,7 @@
         if (dark) r.classList.add('dark')
         r.style.colorScheme = dark ? 'dark' : 'light'
         r.dataset.theme = dark ? 'dark' : 'light'
-        var bg = dark ? '#000000' : '#F2F2F7'
+        var bg = dark ? '#0B0D10' : '#F2F2F7'
         r.style.backgroundColor = bg
         var metas = document.querySelectorAll('meta[name="theme-color"]')
         for (var i = 0; i < metas.length; i++) { metas[i].removeAttribute('media'); metas[i].setAttribute('content', bg) }

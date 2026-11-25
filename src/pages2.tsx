@@ -83,7 +83,7 @@ export function FuelPage({ open }: { open: Open }) {
       )}
 
       <button onClick={() => open({ kind: 'log', tab: 'fuel' })} aria-label="Log fuel"
-        style={{ right: 'max(1rem, env(safe-area-inset-right))', bottom: layout === 'phone' ? 'calc(5.25rem + env(safe-area-inset-bottom))' : '1rem' }}
+        style={{ right: 'max(1rem, env(safe-area-inset-right))', bottom: layout === 'phone' ? 'calc(5.5rem + env(safe-area-inset-bottom))' : '1rem' }}
         className="btn-primary fixed z-20 rounded-full px-5 shadow-xl shadow-orange-500/30">
         <Fuel size={18} /> LOG FUEL
       </button>

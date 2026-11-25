@@ -104,12 +104,12 @@ const TONE_STYLE: Record<PartTone, { bg: string; fg: string }> = {
  * A rounded tile holding the part's icon, tinted by its status. The tile is decorative: status is always also stated in
  * words next to it, so colour is never the only signal.
  */
-export function PartIcon({ item, tone = 'check', size = 40 }: { item: { guideKey?: string; name?: string }; tone?: PartTone; size?: number }) {
+export function PartIcon({ item, tone = 'check', size = 40, round = false }: { item: { guideKey?: string; name?: string }; tone?: PartTone; size?: number; round?: boolean }) {
   const key = partKeyFor(item)
   const Icon = key ? PART_ICON[key] : Wrench
   const t = TONE_STYLE[tone]
   return (
-    <span className="grid shrink-0 place-items-center" style={{ width: size, height: size, background: t.bg, color: t.fg, borderRadius: size * 0.3 }} aria-hidden>
+    <span className="grid shrink-0 place-items-center" style={{ width: size, height: size, background: t.bg, color: t.fg, borderRadius: round ? '50%' : size * 0.3 }} aria-hidden>
       <Icon size={size * 0.5} strokeWidth={1.9} />
     </span>
   )

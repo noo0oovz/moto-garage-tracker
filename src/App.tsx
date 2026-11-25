@@ -153,14 +153,14 @@ export default function App() {
       )}
 
       <div className={sidebar ? 'pl-64' : rail ? 'pl-20' : ''} style={rail ? { paddingLeft: 'calc(5rem + env(safe-area-inset-left))' } : undefined}>
-        {/* Phone header: the vehicle card is the whole header. */}
+        {/* Phone header: only a compact switcher and the theme button. The Garage's own header shows the vehicle in full. */}
         {phone && (
           <header className="pt-safe sticky top-0 z-20 border-b backdrop-blur-xl" style={barStyle}>
             <div className="flex items-center gap-2 px-4 py-2">
               {empty ? (
                 <span className="flex min-h-11 min-w-0 flex-1 items-center gap-2.5 text-[17px] font-semibold tracking-tight">{brandMark(32)} MotoGarage PH</span>
               ) : (
-                <div className="min-w-0 flex-1"><VehicleSwitcher onAdd={addVehicle} /></div>
+                <div className="min-w-0 flex-1"><VehicleSwitcher slim onAdd={addVehicle} /></div>
               )}
               {themeButton('grid h-11 w-11 shrink-0 place-items-center rounded-full hover:bg-[var(--surface-2)]')}
             </div>
@@ -187,7 +187,7 @@ export default function App() {
 
         {saveBanner}
         {backupBanner}
-        <main ref={mainRef} className={`mx-auto w-full max-w-7xl px-4 pt-5 md:px-6 ${phone ? 'pb-28' : 'pb-10 md:pt-6'}`}
+        <main ref={mainRef} className={`mx-auto w-full max-w-7xl px-4 pt-5 md:px-6 ${phone ? 'pb-32' : 'pb-10 md:pt-6'}`}
           style={{ paddingRight: 'max(1rem, env(safe-area-inset-right))' }}>
           {empty && NEEDS_VEHICLE.includes(page) && <Welcome onAdd={addVehicle} go={go} page={page} />}
           {!empty && page === 'garage' && <GaragePage open={open} go={go} />}
@@ -203,10 +203,13 @@ export default function App() {
         </main>
       </div>
 
-      {/* Phone bottom nav: translucent tab bar; the centre button is the single quick action. */}
+      {/* Phone bottom nav: a floating rounded bar, inset from the edges. The centre button sits inside it at the same height as
+          the tabs, so it reads as one of the bar's controls and not as something bolted on top. */}
       {phone && (
-        <nav aria-label="Main" className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t backdrop-blur-xl" style={barStyle}>
-          <div className="grid grid-cols-5 items-center">
+        <nav aria-label="Main" className="pointer-events-none fixed inset-x-0 bottom-0 z-30 px-4"
+          style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+          <div className="pointer-events-auto mx-auto grid max-w-md grid-cols-5 items-center backdrop-blur-xl"
+            style={{ ...barStyle, border: '1px solid var(--hairline)', borderRadius: 28, boxShadow: '0 8px 24px rgba(0,0,0,0.18)' }}>
             {[NAV[0], NAV[1]].map((n) => (
               <button key={n.page} onClick={() => go(n.page)} aria-current={isActive(n.page) ? 'page' : undefined}
                 className="flex min-h-14 flex-col items-center justify-center gap-0.5 text-[10px] font-medium" style={{ color: isActive(n.page) ? 'var(--brand)' : 'var(--text-2)' }}>
@@ -215,8 +218,8 @@ export default function App() {
             ))}
             <div className="flex justify-center">
               <button onClick={() => (empty ? addVehicle() : open({ kind: 'log', tab: 'fuel' }))} aria-label={empty ? 'Add vehicle' : 'Quick log'}
-                className="-mt-5 grid h-14 w-14 place-items-center rounded-full transition active:scale-95" style={{ background: 'var(--brand)', color: 'var(--brand-on)', boxShadow: '0 4px 14px color-mix(in srgb, var(--brand) 35%, transparent)' }}>
-                <Plus size={26} />
+                className="grid h-11 w-11 place-items-center rounded-full transition active:scale-95" style={{ background: 'var(--brand)', color: 'var(--brand-on)' }}>
+                <Plus size={22} strokeWidth={2.4} />
               </button>
             </div>
             {[NAV[2], NAV[3]].map((n) => (

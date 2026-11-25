@@ -321,24 +321,25 @@ export interface Limit { label: string; over: boolean; known: boolean }
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`
 
 /** "about 3 months" for long spans, otherwise days. Never says "NaN" or a negative number. */
-export function spanLabel(days: number): string {
+export function spanLabel(days: number, short = false): string {
   const d = Math.abs(Math.round(days))
-  if (d >= 60) return `about ${plural(Math.round(d / 30), 'month')}`
-  if (d >= 14) return `about ${plural(Math.round(d / 7), 'week')}`
-  return plural(d, 'day')
+  // the short form is for list rows, where room is tight: "6 mo", "3 wk", "12 d"
+  if (d >= 60) return short ? `${Math.round(d / 30)} mo` : `about ${plural(Math.round(d / 30), 'month')}`
+  if (d >= 14) return short ? `${Math.round(d / 7)} wk` : `about ${plural(Math.round(d / 7), 'week')}`
+  return short ? `${d} d` : plural(d, 'day')
 }
 
 /**
  * The two limits of an interval as plain words: how far (km) and how long (time) are left, or how far past they are.
  * Either is `known: false` when the item has no such limit, so the screen can leave it out instead of printing a dash.
  */
-export function limits(h: Pick<Health, 'kmRemaining' | 'daysRemaining'>): { km: Limit; time: Limit } {
+export function limits(h: Pick<Health, 'kmRemaining' | 'daysRemaining'>, short = false): { km: Limit; time: Limit } {
   const km: Limit = h.kmRemaining === undefined || !Number.isFinite(h.kmRemaining)
     ? { label: '', over: false, known: false }
     : h.kmRemaining < 0 ? { label: `${num(-h.kmRemaining)} km over`, over: true, known: true } : { label: `${num(h.kmRemaining)} km left`, over: false, known: true }
   const time: Limit = h.daysRemaining === undefined || !Number.isFinite(h.daysRemaining)
     ? { label: '', over: false, known: false }
-    : h.daysRemaining < 0 ? { label: `${spanLabel(h.daysRemaining)} over`, over: true, known: true } : { label: `${spanLabel(h.daysRemaining)} left`, over: false, known: true }
+    : h.daysRemaining < 0 ? { label: `${spanLabel(h.daysRemaining, short)} over`, over: true, known: true } : { label: `${spanLabel(h.daysRemaining, short)} left`, over: false, known: true }
   return { km, time }
 }
 
@@ -356,4 +357,29 @@ export function headlineLimit(m: Pick<MaintItem, 'intervalKm' | 'intervalMonths'
   const timeDays = daysBetween(today, h.dueDate as string)
   if (!Number.isFinite(kmDays)) return 'km'
   return kmDays <= timeDays ? 'km' : 'time'
+}
+
+/**
+ * The single status line for a maintenance row, which replaces a separate "Overdue" badge, so it has to say on its own
+ * whether the item is late: "2 days over", "400 km over", "1,600 km left", "about 6 weeks left".
+ *  - If a limit has been passed, that is the news, so it is the one shown (distance first if both are).
+ *  - Otherwise the limit that runs out first is shown.
+ * The time figure comes from the real calendar due date, not from `daysRemaining`, which also folds in the distance limit.
+ */
+export function rowStatus(
+  m: Pick<MaintItem, 'intervalKm' | 'intervalMonths' | 'lastServiceDate'>,
+  h: Pick<Health, 'kmRemaining' | 'daysRemaining' | 'dueDate'>,
+  avgDailyKm: number,
+  today = todayISO(),
+  short = true,
+): { text: string; over: boolean } {
+  const km = limits({ kmRemaining: h.kmRemaining }, short).km
+  const calendarDays = m.intervalMonths && h.dueDate ? daysBetween(today, h.dueDate) : undefined
+  const time = limits({ daysRemaining: calendarDays }, short).time
+  const over = km.over || time.over
+  if (km.over) return { text: km.label, over }
+  if (time.over) return { text: time.label, over }
+  const pick = headlineLimit(m, h, avgDailyKm, today)
+  const shown = pick === 'time' ? time : pick === 'km' ? km : km.known ? km : time
+  return { text: shown.known ? shown.label : '', over }
 }
